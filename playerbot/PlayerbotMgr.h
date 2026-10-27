@@ -135,6 +135,8 @@ private:
     std::string HandleBotRandom(Player* bot, Player* master, const std::string param);
 
     PlayerBotMap playerBots;
+    // Vanguard: companions that wave hello once they stand next to their master
+    std::set<uint32> m_companionGreetings;
     std::map<std::string, HolderCommandHandler> m_holderHandlers;
     std::map<std::string, BotCommandHandler> m_botCommandHandlers;
     ObjectGuid m_spoofGuid;

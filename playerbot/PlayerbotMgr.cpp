@@ -202,6 +202,12 @@ void PlayerbotHolder::UpdateSessions(uint32 elapsed)
                 botAi->TellPlayer(master, "I am no longer in your group, so I am leaving.");
                 botAi->SetShouldLogOut(true);
             }
+            // A called companion says /hello when it has arrived, so its master sees it
+            else if (m_companionGreetings.count(bot->GetGUIDLow()))
+            {
+                m_companionGreetings.erase(bot->GetGUIDLow());
+                botAi->PlayEmote(TEXTEMOTE_HELLO);
+            }
         }
 
         if (bot->GetPlayerbotAI() && bot->GetPlayerbotAI()->GetShouldLogOut() && !bot->IsStunnedByLogout() && !bot->GetSession()->isLogingOut())
@@ -303,6 +309,23 @@ void PlayerbotHolder::LogoutPlayerBot(uint32 guid, bool allowInstant, bool forDe
         Player* master = ai->GetMaster();
         if (master)
             masterWorldSessionPtr = master->GetSession();
+
+        // Vanguard: a companion waves goodbye and leaves its master's party, instead of staying
+        // there as an offline member. ShouldLogOut first, so UpdateSessions doesn't report the
+        // party change ("I am no longer in your group").
+        if (!forDelete && ai->IsCompanion() && bot->IsInWorld() && !bot->IsStunnedByLogout() && !botWorldSessionPtr->isLogingOut())
+        {
+            m_companionGreetings.erase(guid);
+            ai->SetShouldLogOut(true);
+            ai->PlayEmote(TEXTEMOTE_BYE);
+            if (bot->GetGroup())
+            {
+                WorldPacket p;
+                std::string member = bot->GetName();
+                p << uint32(PARTY_OP_LEAVE) << member << uint32(0);
+                bot->GetSession()->HandleGroupDisbandOpcode(p);
+            }
+        }
 
         // check for instant logout
         bool logout = botWorldSessionPtr->ShouldLogOut(time(nullptr));
@@ -566,6 +589,9 @@ void PlayerbotHolder::OnBotLogin(Player * const bot)
         ai->SetShouldLogOut(true);
         return;
     }
+
+    if (companion)
+        m_companionGreetings.insert(bot->GetGUIDLow());
 
     if (master && !master->IsTaxiFlying())
     {
