@@ -63,7 +63,7 @@ file(GLOB Playerbot_Values ${CMAKE_CURRENT_SOURCE_DIR}/playerbot/strategy/values
 
 #Vanguard files (gambits)
 file(GLOB Playerbot_Vanguard ${CMAKE_CURRENT_SOURCE_DIR}/playerbot/strategy/vanguard/*.cpp ${CMAKE_CURRENT_SOURCE_DIR}/playerbot/strategy/vanguard/*.h)
-    source_group("Player Bot\Strategies\Vanguard" FILES ${Playerbot_Vanguard})
+    source_group("Player Bot\\Strategies\\Vanguard" FILES ${Playerbot_Vanguard})
     LIST(APPEND LIBRARY_SRCS ${Playerbot_Vanguard})
 
 ## Class files
