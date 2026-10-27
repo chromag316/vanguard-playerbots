@@ -7,6 +7,7 @@
 #include "RandomItemMgr.h"
 #include "World/WorldState.h"
 #include "playerbot/PlayerbotHelpMgr.h"
+#include "playerbot/strategy/vanguard/GambitMgr.h"
 #include "playerbot/strategy/actions/CheatAction.h"
 
 #include "playerbot/TravelMgr.h"
@@ -809,6 +810,7 @@ bool PlayerbotAIConfig::Initialize()
     sPlayerbotTextMgr.LoadBotTexts();
     sPlayerbotTextMgr.LoadBotTextChance();
     sPlayerbotHelpMgr.LoadBotHelpTexts();
+    sGambitMgr.LoadCatalog();
 
     LoadTalentSpecs();
 

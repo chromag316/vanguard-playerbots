@@ -119,6 +119,7 @@ namespace ai
             creators["debug"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "debug"); };
             creators["cdebug"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "cdebug"); };
             creators["cs"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "cs"); };
+            creators["gambits"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "gambits"); };
             creators["wts"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "wts"); };
             creators["hire"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "hire"); };
             creators["craft"] = [](PlayerbotAI* ai) { return new ChatCommandTrigger(ai, "craft"); };

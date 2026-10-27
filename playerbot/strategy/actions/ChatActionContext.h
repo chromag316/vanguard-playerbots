@@ -63,6 +63,7 @@
 #include "AvoidCreatureListAction.h"
 #include "CustomStrategyEditAction.h"
 #include "FlagAction.h"
+#include "playerbot/strategy/vanguard/GambitActions.h"
 #include "HireAction.h"
 #include "RangeAction.h"
 #include "SetCraftAction.h"
@@ -184,6 +185,7 @@ namespace ai
             creators["debug"] = [](PlayerbotAI* ai) { return new DebugAction(ai); };
             creators["cdebug"] = [](PlayerbotAI* ai) { return new DebugAction(ai); };
             creators["cs"] = [](PlayerbotAI* ai) { return new CustomStrategyEditAction(ai); };
+            creators["gambits"] = [](PlayerbotAI* ai) { return new GambitListAction(ai); };
             creators["wts"] = [](PlayerbotAI* ai) { return new WtsAction(ai); };
             creators["hire"] = [](PlayerbotAI* ai) { return new HireAction(ai); };
             creators["craft"] = [](PlayerbotAI* ai) { return new SetCraftAction(ai); };

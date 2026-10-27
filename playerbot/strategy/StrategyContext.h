@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CustomStrategy.h"
+#include "vanguard/GambitStrategy.h"
 #include "generic/NonCombatStrategy.h"
 #include "generic/RacialsStrategy.h"
 #include "generic/ChatCommandHandlerStrategy.h"
@@ -92,6 +93,7 @@ namespace ai
             creators["return"] = [](PlayerbotAI* ai) { return new ReturnStrategy(ai); };
             creators["lfg"] = [](PlayerbotAI* ai) { return new LfgStrategy(ai); };
             creators["custom"] = [](PlayerbotAI* ai) { return new CustomStrategy(ai); };
+            creators["gambits"] = [](PlayerbotAI* ai) { return new GambitStrategy(ai); };
             creators["reveal"] = [](PlayerbotAI* ai) { return new RevealStrategy(ai); };
             creators["collision"] = [](PlayerbotAI* ai) { return new CollisionStrategy(ai); };
             creators["rpg"] = [](PlayerbotAI* ai) { return new RpgStrategy(ai); };

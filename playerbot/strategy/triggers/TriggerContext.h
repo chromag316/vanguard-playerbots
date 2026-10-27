@@ -22,6 +22,7 @@
 #include "MechanarDungeonTriggers.h"
 #include "GlyphTriggers.h"
 #include "WorldBuffTravelTriggers.h"
+#include "playerbot/strategy/vanguard/GambitTriggers.h"
 
 #ifdef GenerateBotTests
 #include "../tests/TestTriggers.h"
@@ -245,6 +246,7 @@ namespace ai
             creators["in raid fight"] = [](PlayerbotAI* ai) { return new InRaidFightTrigger(ai); };
 
             creators["val"] = [](PlayerbotAI* ai) { return new ValueTrigger(ai); };
+            creators["gambit"] = [](PlayerbotAI* ai) { return new GambitTrigger(ai); };
 
             creators["rpg"] = [](PlayerbotAI* ai) { return new RpgTrigger(ai); };
             creators["rpg wander"] = [](PlayerbotAI* ai) { return new RpgWanderTrigger(ai); };

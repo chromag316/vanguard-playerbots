@@ -108,6 +108,7 @@
 #include "WorldBuffTravelValues.h"
 #include "AvoidCreatureListValue.h"
 #include "CreatureIdValue.h"
+#include "playerbot/strategy/vanguard/GambitTriggers.h"
 
 namespace ai
 {
@@ -391,6 +392,7 @@ namespace ai
             creators["not"] = [](PlayerbotAI* ai) { return new NotValue(ai); };
             creators["gt32"] = [](PlayerbotAI* ai) { return new GT32Value(ai); };
             creators["manual bool"] = [](PlayerbotAI* ai) { return new BoolManualSetValue(ai); };
+            creators["gambit target"] = [](PlayerbotAI* ai) { return new GambitTargetValue(ai); };
             creators["manual int"] = [](PlayerbotAI* ai) { return new IntManualSetValue(ai); };
             creators["manual saved int"] = [](PlayerbotAI* ai) { return new IntManualSetSavedValue(ai); };
             creators["manual string"] = [](PlayerbotAI* ai) { return new StringManualSetValue(ai); };

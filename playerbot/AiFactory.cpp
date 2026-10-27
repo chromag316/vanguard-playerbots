@@ -680,6 +680,12 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
             combatEngine->addStrategies("behind", "stealth", "poisons", "buff", NULL);
         }
     }
+
+    // Vanguard: the player's own companions follow their gambits
+    if (!facade->IsRealPlayer() && !sRandomPlayerbotMgr.IsRandomBot(player))
+    {
+        combatEngine->addStrategy("gambits");
+    }
 }
 
 Engine* AiFactory::createCombatEngine(Player* player, PlayerbotAI* const facade, AiObjectContext* AiObjectContext)
@@ -1106,6 +1112,12 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
             }
 #endif
         }
+    }
+
+    // Vanguard: the player's own companions follow their gambits
+    if (!facade->IsRealPlayer() && !sRandomPlayerbotMgr.IsRandomBot(player))
+    {
+        nonCombatEngine->addStrategy("gambits");
     }
 }
 
