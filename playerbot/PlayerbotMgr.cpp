@@ -106,6 +106,58 @@ void PlayerbotHolder::ForEachPlayerbot(std::function<void(Player*)> callback) co
     }
 }
 
+// Vanguard: a companion (a player's own bot, PlayerbotAI::IsCompanion) is only ever in its
+// master's party. Outside a battleground that is GetGroup(); inside one, the party the
+// player came with.
+static Group* CompanionParty(Player* player)
+{
+    return player->GetOriginalGroup() ? player->GetOriginalGroup() : player->GetGroup();
+}
+
+// Why a master cannot take a companion now, or nullptr when it can.
+static const char* CompanionRefusal(Player* master)
+{
+    if (master->InBattleGround())
+        return "You cannot call companions in a battleground";
+    Group* party = CompanionParty(master);
+    if (party && party->IsFull())
+        return "Your group is full";
+    return nullptr;
+}
+
+// Puts a companion in its master's party (a new one when the master has none) and next to
+// the master. False when it cannot join: the caller logs it out.
+static bool JoinMasterParty(Player* bot, Player* master)
+{
+    if (CompanionRefusal(master))
+        return false;
+
+    Group* party = CompanionParty(master);
+    if (!party)
+    {
+        party = new Group;
+        if (!party->Create(master->GetObjectGuid(), master->GetName()))
+        {
+            delete party;
+            return false;
+        }
+        sObjectMgr.AddGroup(party);
+    }
+
+    if (!party->IsMember(bot->GetObjectGuid()) && !party->AddMember(bot->GetObjectGuid(), bot->GetName()))
+        return false;
+
+    // A taxi or a transport has no spot to stand next to the master; the companion then
+    // catches up through its follow strategy.
+    if (!master->IsTaxiFlying() && !master->GetTransport() && !master->IsBeingTeleported())
+    {
+        float x, y, z;
+        master->GetClosePoint(x, y, z, bot->GetObjectBoundingRadius(), sPlayerbotAIConfig.followDistance, master->GetOrientation() + M_PI_F);
+        bot->TeleportTo(master->GetMapId(), x, y, z, master->GetOrientation());
+    }
+    return true;
+}
+
 void PlayerbotHolder::MovePlayerBot(uint32 guid, PlayerbotHolder* newHolder)
 {
     if (newHolder)
@@ -137,6 +189,19 @@ void PlayerbotHolder::UpdateSessions(uint32 elapsed)
         else if (bot->IsInWorld())
         {
             bot->GetSession()->HandleBotPackets();
+        }
+
+        // Vanguard: a companion kicked from, or left outside, its master's party despawns.
+        PlayerbotAI* botAi = bot->GetPlayerbotAI();
+        if (botAi && !botAi->GetShouldLogOut() && bot->IsInWorld() && !bot->IsBeingTeleported() && botAi->IsCompanion())
+        {
+            Player* master = botAi->GetMaster();
+            Group* party = CompanionParty(bot);
+            if (master && master->IsInWorld() && (!party || party != CompanionParty(master)))
+            {
+                botAi->TellPlayer(master, "I am no longer in your group, so I am leaving.");
+                botAi->SetShouldLogOut(true);
+            }
         }
 
         if (bot->GetPlayerbotAI() && bot->GetPlayerbotAI()->GetShouldLogOut() && !bot->IsStunnedByLogout() && !bot->GetSession()->isLogingOut())
@@ -444,8 +509,20 @@ void PlayerbotHolder::OnBotLogin(Player * const bot)
             master->GetGroup()->ChangeLeader(masterGuid);
     }
 
+    // Vanguard: a companion leaves any party but its master's, and joins that below.
+    const bool companion = master && ai->IsCompanion();
     Group* group = bot->GetGroup();
-    if (group)
+    if (companion)
+    {
+        if (group && group != CompanionParty(master))
+        {
+            WorldPacket p;
+            std::string member = bot->GetName();
+            p << uint32(PARTY_OP_LEAVE) << member << uint32(0);
+            bot->GetSession()->HandleGroupDisbandOpcode(p);
+        }
+    }
+    else if (group)
     {
         bool groupValid = false;
         Group::MemberSlotList const& slots = group->GetMemberSlots();
@@ -481,6 +558,14 @@ void PlayerbotHolder::OnBotLogin(Player * const bot)
     }
 
     ai->ResetStrategies();
+
+    if (companion && !JoinMasterParty(bot, master))
+    {
+        const char* refusal = CompanionRefusal(master);
+        ai->TellPlayer(master, std::string(refusal ? refusal : "I cannot join your group") + ", so I am leaving.");
+        ai->SetShouldLogOut(true);
+        return;
+    }
 
     if (master && !master->IsTaxiFlying())
     {
@@ -1826,6 +1911,13 @@ std::string PlayerbotHolder::HandleBotAddLogin(Player* bot, Player* master, cons
     uint32 botAccount = sObjectMgr.GetPlayerAccountIdByGUID(guid);
     bool isMasterAccount = (masterAccountId == botAccount);
     bool isRandomAccount = sPlayerbotAIConfig.IsInRandomAccountList(botAccount);
+
+    // Vanguard: a companion must join its master's party, so a full party cannot take one.
+    if (!isRandomAccount && master)
+    {
+        if (const char* refusal = CompanionRefusal(master))
+            return refusal;
+    }
 
     if (isRandomAccount)
         sRandomPlayerbotMgr.AddRandomBot(guid);
