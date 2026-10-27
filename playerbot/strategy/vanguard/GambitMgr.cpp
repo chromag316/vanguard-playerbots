@@ -250,7 +250,6 @@ bool GambitMgr::HandleConsoleCommand(ChatHandler* handler, char const* args)
     {
         handler->SendSysMessage("Usage: .gambit list <guid>");
         handler->SendSysMessage("       .gambit save <guid> <count> [<enabled> <condition> <param> <action> <param>] x count");
-        handler->SetSentErrorMessage(true);
         return false;
     }
 
@@ -268,7 +267,6 @@ bool GambitMgr::HandleConsoleCommand(ChatHandler* handler, char const* args)
     if (numbers.size() < 2 || numbers.size() != 2 + size_t(numbers[1]) * 5)
     {
         handler->SendSysMessage("Gambits not saved: the count does not match the number of values");
-        handler->SetSentErrorMessage(true);
         return false;
     }
 
@@ -279,7 +277,6 @@ bool GambitMgr::HandleConsoleCommand(ChatHandler* handler, char const* args)
         if (v[0] > 1)
         {
             handler->SendSysMessage("Gambits not saved: enabled must be 0 or 1");
-            handler->SetSentErrorMessage(true);
             return false;
         }
         GambitSlot gambit;
@@ -295,7 +292,6 @@ bool GambitMgr::HandleConsoleCommand(ChatHandler* handler, char const* args)
     if (!sGambitMgr.Save(guidLow, slots, error))
     {
         handler->PSendSysMessage("Gambits not saved: %s", error.c_str());
-        handler->SetSentErrorMessage(true);
         return false;
     }
 
