@@ -1321,10 +1321,45 @@ void PlayerbotMgr::CheckTellErrors(uint32 elapsed)
     errors.clear();
 }
 
+// Vanguard: "Companion zones: Name:Zone, ..." for the master's other characters: the live zone
+// of one in the world, else the zone it logged out in. The Vanguard addon shows it in its list.
+static std::string ListCompanionZones(Player* master)
+{
+    std::ostringstream out;
+    out << "Companion zones: ";
+    bool first = true;
+    auto results = CharacterDatabase.PQuery("SELECT guid, name, zone FROM characters WHERE account = '%u'",
+        master->GetSession()->GetAccountId());
+    if (results)
+    {
+        do
+        {
+            Field* fields = results->Fetch();
+            std::string name = fields[1].GetString();
+            if (name == master->GetName())
+                continue;
+
+            uint32 zone = fields[2].GetUInt32();
+            if (Player* online = sObjectMgr.GetPlayer(ObjectGuid(HIGHGUID_PLAYER, fields[0].GetUInt32())))
+                zone = online->GetZoneId();
+
+            AreaTableEntry const* area = zone ? GetAreaEntryByAreaID(zone) : nullptr;
+            if (!area)
+                continue;
+
+            out << (first ? "" : ", ") << name << ":" << area->area_name[0];
+            first = false;
+        } while (results->NextRow());
+    }
+    return out.str();
+}
+
 std::list<std::string> PlayerbotHolder::HandleList(Player* master, const std::string param, AccountTypes security)
 {
     std::list<std::string> messages;
     messages.push_back(ListBots(master, param));
+    if (master)
+        messages.push_back(ListCompanionZones(master));
     return messages;
 }
 
