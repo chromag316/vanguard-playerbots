@@ -12,6 +12,7 @@
 #include "Accounts/AccountMgr.h"
 #include "strategy/actions/ChangeTalentsAction.h"
 #include "strategy/actions/InviteToGroupAction.h"
+#include "strategy/values/PositionValue.h"
 #include "AiFactory.h"
 #include "Guilds/GuildMgr.h"
 
@@ -125,8 +126,8 @@ static const char* CompanionRefusal(Player* master)
     return nullptr;
 }
 
-// Puts a companion in its master's party (a new one when the master has none) and next to
-// the master. False when it cannot join: the caller logs it out.
+// Puts a companion in its master's party (a new one when the master has none). It stays where
+// it logged out. False when it cannot join: the caller logs it out.
 static bool JoinMasterParty(Player* bot, Player* master)
 {
     if (CompanionRefusal(master))
@@ -147,14 +148,6 @@ static bool JoinMasterParty(Player* bot, Player* master)
     if (!party->IsMember(bot->GetObjectGuid()) && !party->AddMember(bot->GetObjectGuid(), bot->GetName()))
         return false;
 
-    // A taxi or a transport has no spot to stand next to the master; the companion then
-    // catches up through its follow strategy.
-    if (!master->IsTaxiFlying() && !master->GetTransport() && !master->IsBeingTeleported())
-    {
-        float x, y, z;
-        master->GetClosePoint(x, y, z, bot->GetObjectBoundingRadius(), sPlayerbotAIConfig.followDistance, master->GetOrientation() + M_PI_F);
-        bot->TeleportTo(master->GetMapId(), x, y, z, master->GetOrientation());
-    }
     return true;
 }
 
@@ -202,9 +195,9 @@ void PlayerbotHolder::UpdateSessions(uint32 elapsed)
                 botAi->TellPlayer(master, "I am no longer in your group, so I am leaving.");
                 botAi->SetShouldLogOut(true);
             }
-            // A called or summoned companion says /hello once it stands near its master
-            else if (master && master->IsInWorld() && bot->GetMapId() == master->GetMapId() &&
-                     bot->IsWithinDist(master, 30.0f) && botAi->TakeGreetMaster())
+            // A called companion says /hello at once; a summoned one when it stands near its master
+            else if (master && master->IsInWorld() && (!botAi->GetGreetWhenNear() ||
+                     (bot->GetMapId() == master->GetMapId() && bot->IsWithinDist(master, 30.0f))) && botAi->TakeGreetMaster())
             {
                 botAi->PlayEmote(TEXTEMOTE_HELLO);
             }
@@ -589,8 +582,28 @@ void PlayerbotHolder::OnBotLogin(Player * const bot)
         return;
     }
 
+    // A called companion appears where it logged out. Within 10 yards of its master it follows;
+    // farther away it stays there until summoned or told to follow. It waves /hello at once.
     if (companion)
-        ai->SetGreetMaster();
+    {
+        bool nearMaster = bot->GetMapId() == master->GetMapId() && bot->IsWithinDist(master, 10.0f);
+        if (nearMaster)
+        {
+            if (ai->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT))
+                ai->ChangeStrategy("-stay", BotState::BOT_STATE_NON_COMBAT);
+            if (!ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT))
+                ai->ChangeStrategy("+follow", BotState::BOT_STATE_NON_COMBAT);
+        }
+        else
+        {
+            if (ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT))
+                ai->ChangeStrategy("-follow", BotState::BOT_STATE_NON_COMBAT);
+            ai->GetAiObjectContext()->GetValue<ai::PositionEntry>("pos", "stay")->Set(ai::PositionEntry(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), bot->GetMapId()));
+            if (!ai->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT))
+                ai->ChangeStrategy("+stay", BotState::BOT_STATE_NON_COMBAT);
+        }
+        ai->SetGreetMaster(false);
+    }
 
     if (master && !master->IsTaxiFlying())
     {
@@ -1182,7 +1195,7 @@ void PlayerbotMgr::HandleMasterOutgoingPacket(const WorldPacket& packet)
     });
 }
 
-// Vanguard: the master's Calling companion cast completed (the core's spell script calls this).
+// Vanguard: the master's Summoning cast completed (the core's spell script calls this).
 // The companion the cast was for teleports on its next "summon".
 void PlayerbotMgr::FinishCompanionSummon()
 {

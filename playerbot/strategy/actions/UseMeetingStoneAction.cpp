@@ -79,7 +79,7 @@ bool SummonAction::Execute(Event& event)
         return false;
 
     // Vanguard: the owner summons a companion anywhere, like a hearthstone: a 10-second
-    // "Calling companion" cast (spell 90001, a copy of Hearthstone), then the companion comes
+    // "Summoning" cast (spell 90001, a copy of Hearthstone), then the companion comes
     // and follows. Once an hour per companion (GMs: no cooldown); the cooldown is kept in the
     // bot value store, so it survives relogs and restarts. The Vanguard addon reads the minutes
     // from these replies for its cooldown sweep.

@@ -162,7 +162,7 @@ public:
 
     void SaveToDB();
 
-    // Vanguard: the companion the master is casting Calling companion for. The core's spell
+    // Vanguard: the companion the master is casting Summoning for. The core's spell
     // script calls FinishCompanionSummon when the cast completes (from the master's thread).
     void StartCompanionSummon(uint32 botGuid) { pendingCompanionSummon = botGuid; }
     void FinishCompanionSummon();
