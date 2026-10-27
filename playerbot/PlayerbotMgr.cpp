@@ -582,11 +582,11 @@ void PlayerbotHolder::OnBotLogin(Player * const bot)
         return;
     }
 
-    // A called companion appears where it logged out. Within 100 yards of its master it follows;
+    // A called companion appears where it logged out. Within 50 yards of its master it follows;
     // farther away it stays there until summoned or told to follow. It waves /hello at once.
     if (companion)
     {
-        bool nearMaster = bot->GetMapId() == master->GetMapId() && bot->IsWithinDist(master, 100.0f);
+        bool nearMaster = bot->GetMapId() == master->GetMapId() && bot->IsWithinDist(master, 50.0f);
         if (nearMaster)
         {
             if (ai->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT))
