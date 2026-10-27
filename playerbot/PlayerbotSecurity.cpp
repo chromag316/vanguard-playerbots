@@ -14,6 +14,21 @@ PlayerbotSecurity::PlayerbotSecurity(Player* const bot) : bot(bot), account(0)
     }
 }
 
+// Vanguard: players give orders only to their own companions (characters on their account).
+// Random bots take orders from GMs and from other bots (their group's leader); players can
+// still group and talk with them. LevelFor stays as it is: it also decides what a bot may
+// tell its group.
+bool PlayerbotSecurity::CanCommand(Player* from)
+{
+    if (from == bot || from->GetSession()->GetSecurity() >= SEC_GAMEMASTER)
+        return true;
+
+    if (sRandomPlayerbotMgr.IsRandomBot(bot))
+        return from->GetPlayerbotAI() && !from->GetPlayerbotAI()->IsRealPlayer();
+
+    return from->GetSession()->GetAccountId() == account;
+}
+
 PlayerbotSecurityLevel PlayerbotSecurity::LevelFor(Player* from, DenyReason* reason, bool ignoreGroup)
 {
 

@@ -1625,13 +1625,12 @@ bool PlayerbotAI::IsAllowedCommand(std::string text)
         unsecuredCommands.insert("who");
         unsecuredCommands.insert("where");
         unsecuredCommands.insert("wts");
-        unsecuredCommands.insert("sendmail");
         unsecuredCommands.insert("invite");
         unsecuredCommands.insert("leave");
         unsecuredCommands.insert("join");
         unsecuredCommands.insert("lfg");
-        unsecuredCommands.insert("guild invite");
-        unsecuredCommands.insert("guild leave");
+        // Vanguard: sendmail, guild invite and guild leave need orders (CanCommand), so no
+        // player can have someone else's bot mail them its items or leave its guild.
     }
 
     for (std::set<std::string>::iterator i = unsecuredCommands.begin(); i != unsecuredCommands.end(); ++i)
@@ -1705,7 +1704,7 @@ void PlayerbotAI::HandleCommand(uint32 type, const std::string& text, Player& fr
     if (filtered.empty())
         return;
 
-    if (filtered.substr(0, 6) == "debug ")
+    if (filtered.substr(0, 6) == "debug " && GetSecurity()->CanCommand(&fromPlayer))
     {
         std::string response = HandleRemoteCommand(filtered.substr(6));
         WorldPacket data;
@@ -1715,7 +1714,10 @@ void PlayerbotAI::HandleCommand(uint32 type, const std::string& text, Player& fr
         return;
     }
 
-    if (!IsAllowedCommand(filtered) && !GetSecurity()->CheckLevelFor(PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, type != CHAT_MSG_WHISPER, &fromPlayer))
+    // Vanguard: the unsecured requests are for random bots only; a companion obeys its owner.
+    // A player without orders is ignored silently (a random bot's AI chat answers instead).
+    bool unsecured = IsAllowedCommand(filtered) && sRandomPlayerbotMgr.IsRandomBot(bot);
+    if (!unsecured && (!GetSecurity()->CanCommand(&fromPlayer) || !GetSecurity()->CheckLevelFor(PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, type != CHAT_MSG_WHISPER, &fromPlayer)))
         return;
 
     if (type == CHAT_MSG_RAID_WARNING && filtered.find(bot->GetName()) != std::string::npos && filtered.find("award") == std::string::npos)

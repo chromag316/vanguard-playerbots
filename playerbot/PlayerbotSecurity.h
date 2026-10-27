@@ -36,6 +36,8 @@ class PlayerbotSecurity
 	public:
         PlayerbotSecurityLevel LevelFor(Player* from, DenyReason* reason = NULL, bool ignoreGroup = false);
         bool CheckLevelFor(PlayerbotSecurityLevel level, bool silent, Player* from, bool ignoreGroup = false);
+        // Vanguard: may this player give the bot orders at all
+        bool CanCommand(Player* from);
 
     private:
         Player* const bot;

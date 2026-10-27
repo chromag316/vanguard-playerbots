@@ -623,6 +623,10 @@ std::string PlayerbotHolder::ProcessBotCommand(std::string cmd, ObjectGuid guid,
     bool isRandomAccount = sPlayerbotAIConfig.IsInRandomAccountList(botAccount);
     bool isMasterAccount = (masterAccountId == botAccount);
 
+    // Vanguard: a player calls only their own characters, never a random bot or a guildmate's
+    if (!admin && masterguid && !isMasterAccount)
+        return "Not your character";
+
     if (!isRandomAccount && (!isMasterAccount && !admin && masterguid))
     {
         if (master && (!sPlayerbotAIConfig.allowGuildBots || !masterGuildId || (masterGuildId && master->GetGuildIdFromDB(guid) != masterGuildId)))
@@ -735,7 +739,18 @@ std::list<std::string> PlayerbotHolder::HandlePlayerbotCommand(const std::string
         param = args.substr(params[0].size() + 1);
         charname = params[1];
     }
-    
+
+    // Vanguard: players only list, call and dismiss their companions; the rest of .bot is for GMs
+    if (master && useSecurity < SEC_GAMEMASTER)
+    {
+        static const std::set<std::string> playerCommands = { "list", "help", "add", "login", "remove", "logout", "rm" };
+        if (!playerCommands.count(command) || charname == "*" || charname == "guild" || charname == "!")
+        {
+            messages.push_back("You do not have permission to use this command.");
+            return messages;
+        }
+    }
+
     for (auto& [prefix, handler] : m_holderHandlers)
     {
         if (command != prefix)
@@ -927,11 +942,17 @@ std::string PlayerbotHolder::ListBots(Player* master, const std::string param)
     std::list<std::string> names;
     std::map<std::string, std::string> classes;
 
+    // Vanguard: a player sees only the characters on their own account
+    bool ownOnly = master && master->GetSession()->GetSecurity() < SEC_GAMEMASTER;
+
     for (auto& itr : playerBots)
     {
         Player* bot = itr.second;
 
         if (!bot)
+            continue;
+
+        if (ownOnly && bot->GetSession()->GetAccountId() != master->GetSession()->GetAccountId())
             continue;
 
         std::string name = bot->GetName();
@@ -972,7 +993,7 @@ std::string PlayerbotHolder::ListBots(Player* master, const std::string param)
 
     names.sort();
 
-    if (master)
+    if (master && !ownOnly)
     {
         Group* group = master->GetGroup();
         if (group)
@@ -1348,7 +1369,7 @@ std::string PlayerbotHolder::HandleBotAlways(Player* bot, Player* master, const 
         {
             if (master)
             {
-                ProcessBotCommand("add", guid, master->GetObjectGuid(), false, master->GetSession()->GetAccountId(), master->GetGuildId());
+                ProcessBotCommand("add", guid, master->GetObjectGuid(), master->GetSession()->GetSecurity() >= SEC_GAMEMASTER, master->GetSession()->GetAccountId(), master->GetGuildId());
             }
         }
         else

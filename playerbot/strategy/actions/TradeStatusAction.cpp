@@ -25,7 +25,8 @@ bool TradeStatusAction::Execute(Event& event)
         shouldTrade = false;
         if (trader == master || bot->IsInGroup(trader))
         {
-            shouldTrade = ai->GetSecurity()->CheckLevelFor(PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false, trader);
+            // Vanguard: only the owner (or a GM) trades with a companion; random bots don't trade with players
+            shouldTrade = ai->GetSecurity()->CanCommand(trader) && ai->GetSecurity()->CheckLevelFor(PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false, trader);
         }
     }
 
