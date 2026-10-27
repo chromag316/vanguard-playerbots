@@ -202,10 +202,10 @@ void PlayerbotHolder::UpdateSessions(uint32 elapsed)
                 botAi->TellPlayer(master, "I am no longer in your group, so I am leaving.");
                 botAi->SetShouldLogOut(true);
             }
-            // A called companion says /hello when it has arrived, so its master sees it
-            else if (m_companionGreetings.count(bot->GetGUIDLow()))
+            // A called or summoned companion says /hello once it stands near its master
+            else if (master && master->IsInWorld() && bot->GetMapId() == master->GetMapId() &&
+                     bot->IsWithinDist(master, 30.0f) && botAi->TakeGreetMaster())
             {
-                m_companionGreetings.erase(bot->GetGUIDLow());
                 botAi->PlayEmote(TEXTEMOTE_HELLO);
             }
         }
@@ -315,7 +315,6 @@ void PlayerbotHolder::LogoutPlayerBot(uint32 guid, bool allowInstant, bool forDe
         // party change ("I am no longer in your group").
         if (!forDelete && ai->IsCompanion() && bot->IsInWorld() && !bot->IsStunnedByLogout() && !botWorldSessionPtr->isLogingOut())
         {
-            m_companionGreetings.erase(guid);
             ai->SetShouldLogOut(true);
             ai->PlayEmote(TEXTEMOTE_BYE);
             if (bot->GetGroup())
@@ -591,7 +590,7 @@ void PlayerbotHolder::OnBotLogin(Player * const bot)
     }
 
     if (companion)
-        m_companionGreetings.insert(bot->GetGUIDLow());
+        ai->SetGreetMaster();
 
     if (master && !master->IsTaxiFlying())
     {
@@ -1181,6 +1180,19 @@ void PlayerbotMgr::HandleMasterOutgoingPacket(const WorldPacket& packet)
         if (bot->GetPlayerbotAI()->GetMaster() == GetMaster())
             bot->GetPlayerbotAI()->HandleMasterOutgoingPacket(packet);
     });
+}
+
+// Vanguard: the master's Calling companion cast completed (the core's spell script calls this).
+// The companion the cast was for teleports on its next "summon".
+void PlayerbotMgr::FinishCompanionSummon()
+{
+    uint32 guid = pendingCompanionSummon.exchange(0);
+    Player* bot = guid ? GetPlayerBot(guid) : nullptr;
+    if (!bot || !bot->GetPlayerbotAI())
+        return;
+
+    bot->GetPlayerbotAI()->SetCompanionSummonReady();
+    bot->GetPlayerbotAI()->HandleCommand(CHAT_MSG_WHISPER, "summon", *master);
 }
 
 void PlayerbotMgr::SaveToDB()

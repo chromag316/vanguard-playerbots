@@ -733,6 +733,13 @@ public:
     void SetShouldLogOut(bool val = true) { shouldLogOut = val; }
     bool GetShouldLogOut() { return shouldLogOut; }
 
+    // Vanguard: the owner's Calling companion cast finished, so the next summon teleports
+    void SetCompanionSummonReady() { companionSummonReady = true; }
+    bool TakeCompanionSummonReady() { return companionSummonReady.exchange(false); }
+    // Vanguard: wave /hello once next to the master (after a call or a summon)
+    void SetGreetMaster() { greetMaster = true; }
+    bool TakeGreetMaster() { return greetMaster.exchange(false); }
+
     PlayerTalentSpec GetTalentSpec();
     void UpdateTalentSpec(PlayerTalentSpec spec = PlayerTalentSpec::TALENT_SPEC_INVALID);
 
@@ -799,6 +806,8 @@ protected:
     bool isPlayerFriend = false;
     bool isMovingToTransport = false;
     bool shouldLogOut = false;
+    std::atomic<bool> companionSummonReady{false};
+    std::atomic<bool> greetMaster{false};
     bool m_recordMessages = false;
     bool m_recordIncommingMessages = false;
     std::vector<std::string> m_recordedMessages;

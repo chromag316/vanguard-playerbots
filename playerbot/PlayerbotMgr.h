@@ -6,6 +6,7 @@
 #include "Entities/ObjectGuid.h"
 #include "Database/DatabaseEnv.h"
 #include "Globals/SharedDefines.h"
+#include <atomic>
 
 
 class WorldPacket;
@@ -135,8 +136,6 @@ private:
     std::string HandleBotRandom(Player* bot, Player* master, const std::string param);
 
     PlayerBotMap playerBots;
-    // Vanguard: companions that wave hello once they stand next to their master
-    std::set<uint32> m_companionGreetings;
     std::map<std::string, HolderCommandHandler> m_holderHandlers;
     std::map<std::string, BotCommandHandler> m_botCommandHandlers;
     ObjectGuid m_spoofGuid;
@@ -163,11 +162,17 @@ public:
 
     void SaveToDB();
 
+    // Vanguard: the companion the master is casting Calling companion for. The core's spell
+    // script calls FinishCompanionSummon when the cast completes (from the master's thread).
+    void StartCompanionSummon(uint32 botGuid) { pendingCompanionSummon = botGuid; }
+    void FinishCompanionSummon();
+
 protected:
     virtual void OnBotLoginInternal(Player * const bot) override;
     void CheckTellErrors(uint32 elapsed);
 
 private:
+    std::atomic<uint32> pendingCompanionSummon{0};
     Player* const master;
     PlayerBotErrorMap errors;
     time_t lastErrorTell;

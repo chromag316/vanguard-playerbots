@@ -78,17 +78,39 @@ bool SummonAction::Execute(Event& event)
     if (!requester || requester->IsBeingTeleported())
         return false;
 
-    if (requester->GetSession()->GetSecurity() > SEC_PLAYER || sPlayerbotAIConfig.nonGmFreeSummon)
-        return Teleport(requester, requester, bot);
-
-    // Vanguard: the owner summons a companion anywhere, like a hearthstone, once an hour per
-    // companion. The cooldown is kept in the bot value store, so it survives relogs and restarts.
-    // The Vanguard addon reads the minutes from these replies for its cooldown sweep.
+    // Vanguard: the owner summons a companion anywhere, like a hearthstone: a 10-second
+    // "Calling companion" cast (spell 90001, a copy of Hearthstone), then the companion comes
+    // and follows. Once an hour per companion (GMs: no cooldown); the cooldown is kept in the
+    // bot value store, so it survives relogs and restarts. The Vanguard addon reads the minutes
+    // from these replies for its cooldown sweep.
     if (ai->IsCompanion() && requester == GetMaster())
     {
+        const uint32 SPELL_CALLING_COMPANION = 90001;
         const uint32 cooldown = 3600;
+        bool gm = requester->GetSession()->GetSecurity() > SEC_PLAYER;
         uint32 guid = bot->GetGUIDLow();
-        if (sRandomPlayerbotMgr.GetValue(guid, "vanguard summon"))
+
+        // The cast finished (PlayerbotMgr::FinishCompanionSummon)
+        if (ai->TakeCompanionSummonReady())
+        {
+            if (ai->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT))
+                ai->ChangeStrategy("-stay", BotState::BOT_STATE_NON_COMBAT);
+            if (!ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT))
+                ai->ChangeStrategy("+follow", BotState::BOT_STATE_NON_COMBAT);
+
+            if (!Teleport(requester, requester, bot))
+                return false;
+
+            ai->SetGreetMaster();
+            if (gm)
+                return true;
+
+            sRandomPlayerbotMgr.SetValue(guid, "vanguard summon", 1, "", cooldown);
+            ai->TellPlayerNoFacing(requester, "Coming! Summon ready again in 60 min");
+            return true;
+        }
+
+        if (!gm && sRandomPlayerbotMgr.GetValue(guid, "vanguard summon"))
         {
             int32 left = sRandomPlayerbotMgr.GetValueValidTime(guid, "vanguard summon");
             std::ostringstream out;
@@ -97,13 +119,20 @@ bool SummonAction::Execute(Event& event)
             return false;
         }
 
-        if (!Teleport(requester, requester, bot))
+        PlayerbotMgr* mgr = requester->GetPlayerbotMgr();
+        if (!mgr)
             return false;
 
-        sRandomPlayerbotMgr.SetValue(guid, "vanguard summon", 1, "", cooldown);
-        ai->TellPlayerNoFacing(requester, "Coming! Summon ready again in 60 min");
+        mgr->StartCompanionSummon(guid);
+        ai->RunOnOwningThread(requester, [SPELL_CALLING_COMPANION](Player* owner)
+        {
+            owner->CastSpell(owner, SPELL_CALLING_COMPANION, TRIGGERED_NONE);
+        });
         return true;
     }
+
+    if (requester->GetSession()->GetSecurity() > SEC_PLAYER || sPlayerbotAIConfig.nonGmFreeSummon)
+        return Teleport(requester, requester, bot);
 
     if(bot->GetMapId() == requester->GetMapId() && !WorldPosition(bot).canPathTo(requester, bot) && bot->GetDistance(requester) < sPlayerbotAIConfig.sightDistance) //We can't walk to requester so fine to short-range teleport.
         return Teleport(requester, requester, bot);
