@@ -2564,8 +2564,44 @@ void PlayerbotAI::ReInitCurrentEngine()
     currentEngine->Init();
 }
 
-void PlayerbotAI::ChangeStrategy(const std::string& names, BotState type)
+// Vanguard: the strategies a companion may switch. Everything else (class rotations, grinding,
+// travel, quests...) would bring back the normal bot logic, so it is refused.
+static bool IsCompanionStrategy(const std::string& name, bool removing)
 {
+    static const std::set<std::string> allowed = { "gambits", "chat", "default", "follow", "stay", "loot", "mount", "passive", "react", "dead", "group", "dungeon" };
+    static const std::set<std::string> required = { "gambits", "chat", "default", "react", "dead" };
+    if (name.rfind("debug", 0) == 0)
+        return true;
+    return allowed.count(name) && !(removing && required.count(name));
+}
+
+void PlayerbotAI::ChangeStrategy(const std::string& requested, BotState type)
+{
+    std::string names = requested;
+    if (IsCompanion())
+    {
+        std::vector<std::string> kept;
+        bool refused = false;
+        for (const std::string& token : split(requested, ','))
+        {
+            bool hasSign = !token.empty() && (token[0] == '+' || token[0] == '-' || token[0] == '~');
+            std::string name = hasSign ? token.substr(1) : token;
+            if (IsCompanionStrategy(name, hasSign && token[0] != '+'))
+                kept.push_back(token);
+            else
+                refused = true;
+        }
+
+        if (refused && GetMaster())
+            TellPlayer(GetMaster(), "Companions only follow their gambits.");
+
+        names.clear();
+        for (const std::string& token : kept)
+            names += (names.empty() ? "" : ",") + token;
+        if (names.empty())
+            return;
+    }
+
     if(type == BotState::BOT_STATE_ALL)
     {
         for (uint8 i = 0; i < (uint8)BotState::BOT_STATE_ALL; i++)
@@ -2824,10 +2860,23 @@ void PlayerbotAI::ResetStrategies(bool autoLoad)
         engines[i]->removeAllStrategies();
     }
 
-    AiFactory::AddDefaultCombatStrategies(bot, this, engines[(uint8)BotState::BOT_STATE_COMBAT]);
-    AiFactory::AddDefaultNonCombatStrategies(bot, this, engines[(uint8)BotState::BOT_STATE_NON_COMBAT]);
-    AiFactory::AddDefaultDeadStrategies(bot, this, engines[(uint8)BotState::BOT_STATE_DEAD]);
-    AiFactory::AddDefaultReactionStrategies(bot, this, reactionEngine);
+    const bool companion = IsCompanion();
+    if (companion)
+    {
+        // Vanguard: like Final Fantasy XII, a companion only does what its gambits say, plus
+        // following or staying, looting, mounting with its master and death handling.
+        engines[(uint8)BotState::BOT_STATE_COMBAT]->addStrategies("gambits", "chat", "default", NULL);
+        engines[(uint8)BotState::BOT_STATE_NON_COMBAT]->addStrategies("gambits", "chat", "default", "follow", "loot", "mount", NULL);
+        AiFactory::AddDefaultDeadStrategies(bot, this, engines[(uint8)BotState::BOT_STATE_DEAD]);
+        reactionEngine->addStrategies("react", "chat", NULL);
+    }
+    else
+    {
+        AiFactory::AddDefaultCombatStrategies(bot, this, engines[(uint8)BotState::BOT_STATE_COMBAT]);
+        AiFactory::AddDefaultNonCombatStrategies(bot, this, engines[(uint8)BotState::BOT_STATE_NON_COMBAT]);
+        AiFactory::AddDefaultDeadStrategies(bot, this, engines[(uint8)BotState::BOT_STATE_DEAD]);
+        AiFactory::AddDefaultReactionStrategies(bot, this, reactionEngine);
+    }
 
     StanceValue* stanceValue = (StanceValue*)aiObjectContext->GetValue<Stance*>("stance");
 
@@ -2841,7 +2890,7 @@ void PlayerbotAI::ResetStrategies(bool autoLoad)
             stanceValue->Load("near");
     }
 
-    if (autoLoad && HasPlayerRelation()) sPlayerbotDbStore.Load(this);
+    if (autoLoad && HasPlayerRelation() && !companion) sPlayerbotDbStore.Load(this);
 
 #ifdef GenerateBotTests
     for (auto& [state, strats] : testStrategies)

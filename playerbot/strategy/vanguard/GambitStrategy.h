@@ -5,8 +5,8 @@ namespace ai
 {
     // "gambits": the companion's gambit slots, ranked above every class rotation (90.5 for slot
     // 12 up to 96 for slot 1, below ACTION_PASSTROUGH). A slot's trigger reads the slot from
-    // GambitMgr on every check, so saved changes apply at once. When no gambit applies, the
-    // bot's normal strategies decide.
+    // GambitMgr on every check, so saved changes apply at once. Only companions have it, and they
+    // have no class rotation under it: when no gambit applies, a companion only follows or stays.
     class GambitStrategy : public Strategy
     {
     public:

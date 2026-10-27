@@ -2,9 +2,12 @@
 
 // Vanguard gambits: player-programmed tactics for a player's own companion bots, in the style of
 // Final Fantasy XII. A gambit is one slot, "condition -> action", where the condition also names
-// the target (Self, Ally, Foe). Lower slots win. The catalog of conditions and actions lives in
-// the world DB (vanguard_gambit_condition / vanguard_gambit_action); the slots of each companion
-// in the characters DB (vanguard_gambit). The ids below are fixed: the DB rows only name them.
+// the target (Self, Ally, Foe). Lower slots win. A companion runs on its gambits only (see
+// PlayerbotAI::IsCompanion and ResetStrategies).
+// The catalog of conditions and actions lives in the world DB (vanguard_gambit_condition /
+// vanguard_gambit_action). In the characters DB: each class's default list
+// (vanguard_gambit_class_default), and a companion's own list (vanguard_gambit), used only when
+// the companion is in vanguard_gambit_custom. The ids below are fixed: the DB rows only name them.
 
 #include <map>
 #include <mutex>
@@ -24,6 +27,7 @@ namespace ai
         GAMBIT_COND_ALLY_HP_BELOW       = 11,
         GAMBIT_COND_ALLY_DEAD           = 12,
         GAMBIT_COND_ALLY_DISPELLABLE    = 13,
+        GAMBIT_COND_ALLY_WITHOUT_AURA   = 14,
         GAMBIT_COND_FOE_LEADER_TARGET   = 20,
         GAMBIT_COND_FOE_TARGETING_SELF  = 21,
         GAMBIT_COND_FOE_TARGETING_ALLY  = 22,
@@ -39,9 +43,13 @@ namespace ai
         GAMBIT_ACTION_CAST              = 1,
         GAMBIT_ACTION_ATTACK            = 2,
         GAMBIT_ACTION_MOVE_TO_LEADER    = 3,
+        GAMBIT_ACTION_EAT               = 4,
+        GAMBIT_ACTION_DRINK             = 5,
     };
 
     constexpr uint8 GAMBIT_MAX_SLOTS = 12;
+
+    inline bool IsSelfGambitCondition(uint32 conditionId) { return conditionId >= GAMBIT_COND_SELF_ANY && conditionId <= GAMBIT_COND_SELF_MANA_BELOW; }
 
     struct GambitSlot
     {
@@ -64,6 +72,7 @@ namespace ai
     {
         std::string name;
         bool needsSpell = false;
+        bool selfOnly = false;
     };
 
     class GambitMgr
@@ -75,32 +84,46 @@ namespace ai
             return instance;
         }
 
-        // World DB catalog, once at startup
+        // World DB catalog and the class defaults, once at startup
         void LoadCatalog();
 
-        // The slot of a companion, from the cache (loaded from the DB on first use).
-        // False when the slot is empty.
+        // The companion's gambits in effect: its own list when it has one, else its class default
         bool GetSlot(uint32 guidLow, uint8 slot, GambitSlot& out);
         std::vector<GambitSlot> GetSlots(uint32 guidLow);
+        bool IsCustom(uint32 guidLow);
+        std::vector<GambitSlot> GetClassDefault(uint8 classId);
 
-        // Replaces all slots of a companion. Slots are numbered by their order (1..n).
-        // On a validation failure nothing is written and error says why.
+        // Replace a companion's own list (it becomes custom), drop it again, or replace a class
+        // default. Slots are numbered by their order (1..n). On a validation failure nothing is
+        // written and error says why.
         bool Save(uint32 guidLow, const std::vector<GambitSlot>& slots, std::string& error);
+        bool Reset(uint32 guidLow, std::string& error);
+        bool SaveClassDefault(uint8 classId, const std::vector<GambitSlot>& slots, std::string& error);
 
         std::string Describe(const GambitSlot& gambit) const;
 
-        // ".gambit save|list" (mangosd console, SOAP)
+        // ".gambit list|save|reset|default list|default save" (mangosd console, SOAP)
         static bool HandleConsoleCommand(ChatHandler* handler, char const* args);
 
     private:
+        struct Companion
+        {
+            uint8 classId = 0;
+            bool custom = false;
+            std::vector<GambitSlot> slots;
+        };
+
+        // guidLow 0: a class default (spells are only checked to exist)
         bool Validate(uint32 guidLow, const std::vector<GambitSlot>& slots, std::string& error) const;
-        std::vector<GambitSlot> LoadSlots(uint32 guidLow) const;
+        Companion& Cached(uint32 guidLow); // cacheLock held
+        const std::vector<GambitSlot>& Effective(Companion& companion);
 
         std::map<uint32, GambitConditionInfo> conditions;
         std::map<uint32, GambitActionInfo> actions;
 
         std::mutex cacheLock;
-        std::map<uint32, std::vector<GambitSlot>> cache;
+        std::map<uint32, Companion> cache;
+        std::map<uint8, std::vector<GambitSlot>> classDefaults;
     };
 }
 

@@ -121,6 +121,21 @@ Unit* ai::FindGambitTarget(PlayerbotAI* ai, const GambitSlot& gambit)
         return nullptr;
     }
 
+    case GAMBIT_COND_ALLY_WITHOUT_AURA:
+    {
+        uint32 spellId = GambitSpellId(ai, gambit);
+        const SpellEntry* spell = spellId ? sServerFacade.LookupSpellInfo(spellId) : nullptr;
+        if (!spell)
+            return nullptr;
+        // By name: a lower rank, or the same buff from someone else, counts too
+        for (Unit* ally : Allies(ai))
+        {
+            if (ally->IsAlive() && !ai->HasAura(spell->SpellName[0], ally))
+                return ally;
+        }
+        return nullptr;
+    }
+
     case GAMBIT_COND_FOE_LEADER_TARGET:
     {
         Player* leader = ai->GetGroupMaster();
