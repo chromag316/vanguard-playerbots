@@ -2566,44 +2566,8 @@ void PlayerbotAI::ReInitCurrentEngine()
     currentEngine->Init();
 }
 
-// Vanguard: the strategies a companion may switch. Everything else (class rotations, grinding,
-// travel, quests...) would bring back the normal bot logic, so it is refused.
-static bool IsCompanionStrategy(const std::string& name, bool removing)
+void PlayerbotAI::ChangeStrategy(const std::string& names, BotState type)
 {
-    static const std::set<std::string> allowed = { "gambits", "chat", "default", "follow", "stay", "loot", "mount", "passive", "react", "dead", "group", "dungeon" };
-    static const std::set<std::string> required = { "gambits", "chat", "default", "react", "dead" };
-    if (name.rfind("debug", 0) == 0)
-        return true;
-    return allowed.count(name) && !(removing && required.count(name));
-}
-
-void PlayerbotAI::ChangeStrategy(const std::string& requested, BotState type)
-{
-    std::string names = requested;
-    if (IsCompanion())
-    {
-        std::vector<std::string> kept;
-        bool refused = false;
-        for (const std::string& token : split(requested, ','))
-        {
-            bool hasSign = !token.empty() && (token[0] == '+' || token[0] == '-' || token[0] == '~');
-            std::string name = hasSign ? token.substr(1) : token;
-            if (IsCompanionStrategy(name, hasSign && token[0] != '+'))
-                kept.push_back(token);
-            else
-                refused = true;
-        }
-
-        if (refused && GetMaster())
-            TellPlayer(GetMaster(), "Companions only follow their gambits.");
-
-        names.clear();
-        for (const std::string& token : kept)
-            names += (names.empty() ? "" : ",") + token;
-        if (names.empty())
-            return;
-    }
-
     if(type == BotState::BOT_STATE_ALL)
     {
         for (uint8 i = 0; i < (uint8)BotState::BOT_STATE_ALL; i++)
@@ -2862,22 +2826,19 @@ void PlayerbotAI::ResetStrategies(bool autoLoad)
         engines[i]->removeAllStrategies();
     }
 
+    AiFactory::AddDefaultCombatStrategies(bot, this, engines[(uint8)BotState::BOT_STATE_COMBAT]);
+    AiFactory::AddDefaultNonCombatStrategies(bot, this, engines[(uint8)BotState::BOT_STATE_NON_COMBAT]);
+    AiFactory::AddDefaultDeadStrategies(bot, this, engines[(uint8)BotState::BOT_STATE_DEAD]);
+    AiFactory::AddDefaultReactionStrategies(bot, this, reactionEngine);
+
+    // Vanguard: a companion runs its gambits first. They rank above every class rotation, so when
+    // no gambit applies (no condition matches, or the action is not useful or not possible), the
+    // normal playerbot strategies decide.
     const bool companion = IsCompanion();
     if (companion)
     {
-        // Vanguard: like Final Fantasy XII, a companion only does what its gambits say, plus
-        // following or staying, looting, mounting with its master and death handling.
-        engines[(uint8)BotState::BOT_STATE_COMBAT]->addStrategies("gambits", "chat", "default", NULL);
-        engines[(uint8)BotState::BOT_STATE_NON_COMBAT]->addStrategies("gambits", "chat", "default", "follow", "loot", "mount", NULL);
-        AiFactory::AddDefaultDeadStrategies(bot, this, engines[(uint8)BotState::BOT_STATE_DEAD]);
-        reactionEngine->addStrategies("react", "chat", NULL);
-    }
-    else
-    {
-        AiFactory::AddDefaultCombatStrategies(bot, this, engines[(uint8)BotState::BOT_STATE_COMBAT]);
-        AiFactory::AddDefaultNonCombatStrategies(bot, this, engines[(uint8)BotState::BOT_STATE_NON_COMBAT]);
-        AiFactory::AddDefaultDeadStrategies(bot, this, engines[(uint8)BotState::BOT_STATE_DEAD]);
-        AiFactory::AddDefaultReactionStrategies(bot, this, reactionEngine);
+        engines[(uint8)BotState::BOT_STATE_COMBAT]->addStrategy("gambits");
+        engines[(uint8)BotState::BOT_STATE_NON_COMBAT]->addStrategy("gambits");
     }
 
     StanceValue* stanceValue = (StanceValue*)aiObjectContext->GetValue<Stance*>("stance");
@@ -2892,6 +2853,8 @@ void PlayerbotAI::ResetStrategies(bool autoLoad)
             stanceValue->Load("near");
     }
 
+    // Vanguard: no DB-store load for companions. Stores saved by 0.2.1-0.2.3 hold the gambits-only
+    // set and would switch the fallback off again; a companion starts from its class defaults.
     if (autoLoad && HasPlayerRelation() && !companion) sPlayerbotDbStore.Load(this);
 
 #ifdef GenerateBotTests

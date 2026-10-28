@@ -2,7 +2,7 @@
 
 // Vanguard gambits: player-programmed tactics for a player's own companion bots, in the style of
 // Final Fantasy XII. A gambit is one slot, "condition -> action", where the condition also names
-// the target (Self, Ally, Foe). Lower slots win. A companion runs on its gambits only (see
+// the target (Self, Ally, Foe). Lower slots win. A companion runs its gambits first and falls back to the normal AI (see
 // PlayerbotAI::IsCompanion and ResetStrategies).
 // The catalog of conditions and actions lives in the world DB (vanguard_gambit_condition /
 // vanguard_gambit_action). In the characters DB: each class's default list

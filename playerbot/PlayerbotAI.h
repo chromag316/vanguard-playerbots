@@ -648,7 +648,7 @@ public:
     bool HasActivePlayerMaster() const { return master && !master->GetPlayerbotAI(); }
     //Checks if the bot is summoned as alt of a player
     bool IsAlt() { return HasRealPlayerMaster() && !sRandomPlayerbotMgr.IsRandomBot(bot); }
-    // Vanguard: a player's own bot with that player as master. It runs on its gambits only.
+    // Vanguard: a player's own bot with that player as master. It runs its gambits first, then the normal AI.
     bool IsCompanion() { return !IsRealPlayer() && IsAlt() && master->GetSession()->GetAccountId() == bot->GetSession()->GetAccountId(); }
     //Get the group leader or the master of the bot.
     Player* GetGroupMaster() { return bot->InBattleGround() ? master : bot->GetGroup() ? (sObjectMgr.GetPlayer(bot->GetGroup()->GetLeaderGuid()) ? sObjectMgr.GetPlayer(bot->GetGroup()->GetLeaderGuid()) : master) : master; }
