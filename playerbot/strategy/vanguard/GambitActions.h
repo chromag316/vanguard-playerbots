@@ -20,6 +20,16 @@ namespace ai
         bool Current(GambitSlot& gambit, Unit*& target);
     };
 
+    // "gambit passive action::<slot>": casts passive <slot> (an aspect, stance, aura...) on the bot
+    class GambitPassiveAction : public Action, public Qualified
+    {
+    public:
+        GambitPassiveAction(PlayerbotAI* ai) : Action(ai, "gambit passive action"), Qualified() {}
+        std::string getName() override { return "gambit passive action::" + qualifier; }
+        bool Execute(Event& event) override;
+        bool isPossible() override;
+    };
+
     // "gambits" (whisper): the companion lists its gambits
     class GambitListAction : public ChatCommandAction
     {

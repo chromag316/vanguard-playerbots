@@ -3,6 +3,8 @@
 #include "GenericActions.h"
 #include "UseItemAction.h"
 
+#include <set>
+
 using namespace ai;
 
 CastSpellAction::CastSpellAction(PlayerbotAI* ai, std::string spell)
@@ -78,8 +80,24 @@ bool CastSpellAction::Execute(Event& event)
     return executed;
 }
 
+// Vanguard: the spells a companion's normal AI may still cast on its own: mounting, ranged
+// auto-attack and looking after its pet. Every other spell comes from its player's gambits and
+// passives, which cast through PlayerbotAI::CastSpell and do not pass here.
+static bool IsCompanionFallbackSpell(const std::string& name)
+{
+    static const std::set<std::string> allowed = {
+        "mount", "auto shot", "shoot",
+        "call pet", "revive pet", "dismiss pet", "feed pet",
+        "summon imp", "summon voidwalker", "summon succubus", "summon felhunter",
+    };
+    return allowed.count(name) != 0;
+}
+
 bool CastSpellAction::isPossible()
 {
+    if (ai->IsCompanion() && !IsCompanionFallbackSpell(spellName))
+        return false;
+
     if (spellName == "mount")
     {
         if (!bot->IsMounted() && !bot->IsInCombat())

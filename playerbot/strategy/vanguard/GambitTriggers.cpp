@@ -5,16 +5,35 @@
 
 using namespace ai;
 
-uint32 ai::GambitSpellId(PlayerbotAI* ai, const GambitSlot& gambit)
+uint32 ai::KnownSpellRank(PlayerbotAI* ai, uint32 spellId)
 {
-    if (gambit.actionId != GAMBIT_ACTION_CAST)
-        return 0;
-
-    const SpellEntry* spell = sServerFacade.LookupSpellInfo(gambit.actionParam);
+    const SpellEntry* spell = sServerFacade.LookupSpellInfo(spellId);
     if (!spell)
         return 0;
 
     return ai->GetAiObjectContext()->GetValue<uint32>("spell id", spell->SpellName[0])->Get();
+}
+
+uint32 ai::GambitSpellId(PlayerbotAI* ai, const GambitSlot& gambit)
+{
+    return gambit.actionId == GAMBIT_ACTION_CAST ? KnownSpellRank(ai, gambit.actionParam) : 0;
+}
+
+uint32 ai::GambitPassiveSpellId(PlayerbotAI* ai, const std::string& slot)
+{
+    size_t index = size_t(atoi(slot.c_str()));
+    std::vector<uint32> passives = sGambitMgr.GetPassives(ai->GetBot()->GetGUIDLow());
+    if (index < 1 || index > passives.size())
+        return 0;
+    return KnownSpellRank(ai, passives[index - 1]);
+}
+
+bool GambitPassiveTrigger::IsActive()
+{
+    uint32 spellId = GambitPassiveSpellId(ai, getQualifier());
+    const SpellEntry* spell = spellId ? sServerFacade.LookupSpellInfo(spellId) : nullptr;
+    // By name: any rank of the aspect, stance or aura counts
+    return spell && !ai->HasAura(spell->SpellName[0], bot);
 }
 
 static float HealthPct(Unit* unit)
@@ -221,7 +240,9 @@ bool GambitTrigger::IsActive()
     uint8 slot = uint8(atoi(getQualifier().c_str()));
     GambitSlot gambit;
     Unit* target = nullptr;
-    if (sGambitMgr.GetSlot(bot->GetGUIDLow(), slot, gambit) && gambit.enabled)
+    // Retreating ("flee" adds "passive"): no gambit acts on an enemy; heals and buffs still do
+    if (sGambitMgr.GetSlot(bot->GetGUIDLow(), slot, gambit) && gambit.enabled &&
+        !(IsFoeGambitCondition(gambit.conditionId) && ai->HasStrategy("passive", ai->GetState())))
         target = FindGambitTarget(ai, gambit);
 
     SET_AI_VALUE2(ObjectGuid, "gambit target", getQualifier(), target ? target->GetObjectGuid() : ObjectGuid());

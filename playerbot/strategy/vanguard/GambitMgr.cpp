@@ -5,6 +5,8 @@
 #include "Database/DatabaseEnv.h"
 #include "playerbot/ServerFacade.h"
 
+#include <set>
+
 using namespace ai;
 
 static bool IsPlayableClass(uint32 classId)
@@ -62,10 +64,32 @@ void GambitMgr::LoadCatalog()
         } while (result->NextRow());
     }
 
+    passiveCatalog.clear();
+    if (auto result = WorldDatabase.Query("SELECT `class`, `spell_id`, `exclusive_group` FROM `vanguard_gambit_passive` ORDER BY `class`, `sort`"))
+    {
+        do
+        {
+            Field* fields = result->Fetch();
+            GambitPassiveInfo info;
+            info.spellId = fields[1].GetUInt32();
+            info.group = fields[2].GetCppString();
+            passiveCatalog[fields[0].GetUInt8()].push_back(info);
+        } while (result->NextRow());
+    }
+
     std::lock_guard<std::mutex> guard(cacheLock);
     classDefaults.clear();
+    classPassives.clear();
     cache.clear();
     uint32 defaults = 0;
+    if (auto result = CharacterDatabase.Query("SELECT `class`, `spell_id` FROM `vanguard_passive_class_default` ORDER BY `class`, `slot`"))
+    {
+        do
+        {
+            Field* fields = result->Fetch();
+            classPassives[fields[0].GetUInt8()].push_back(fields[1].GetUInt32());
+        } while (result->NextRow());
+    }
     if (auto result = CharacterDatabase.Query("SELECT `slot`, `enabled`, `condition_id`, `condition_param`, `action_id`, `action_param`, `class` "
         "FROM `vanguard_gambit_class_default` ORDER BY `class`, `slot`"))
     {
@@ -81,7 +105,13 @@ void GambitMgr::LoadCatalog()
         } while (result->NextRow());
     }
 
-    sLog.outString("Loaded %u gambit conditions, %u gambit actions, %u class default gambits", uint32(conditions.size()), uint32(actions.size()), defaults);
+    uint32 passives = 0;
+    for (auto& entry : passiveCatalog)
+        passives += uint32(entry.second.size());
+    sLog.outString("Loaded %u gambit conditions, %u gambit actions, %u class default gambits, %u passive spells",
+        uint32(conditions.size()), uint32(actions.size()), defaults, passives);
+    if (passiveCatalog.empty())
+        sLog.outError("Gambit passive catalog is empty: apply vanguard-db vanguard/world/0012_gambit_passives.sql.");
     if (conditions.empty() || actions.empty())
         sLog.outError("Gambit catalog is empty: apply vanguard-db vanguard/world/0010_gambit_catalog.sql. Companions will do nothing.");
 }
@@ -108,6 +138,14 @@ GambitMgr::Companion& GambitMgr::Cached(uint32 guidLow)
                     companion.slots.push_back(gambit);
             } while (result->NextRow());
         }
+        if (auto result = CharacterDatabase.PQuery("SELECT `spell_id` FROM `vanguard_passive` WHERE `guid` = '%u' AND `slot` BETWEEN 1 AND %u ORDER BY `slot`",
+            guidLow, uint32(GAMBIT_MAX_PASSIVES)))
+        {
+            do
+            {
+                companion.passives.push_back(result->Fetch()[0].GetUInt32());
+            } while (result->NextRow());
+        }
     }
     return cache.emplace(guidLow, companion).first->second;
 }
@@ -115,6 +153,39 @@ GambitMgr::Companion& GambitMgr::Cached(uint32 guidLow)
 const std::vector<GambitSlot>& GambitMgr::Effective(Companion& companion)
 {
     return companion.custom ? companion.slots : classDefaults[companion.classId];
+}
+
+const std::vector<uint32>& GambitMgr::EffectivePassives(Companion& companion)
+{
+    return companion.custom ? companion.passives : classPassives[companion.classId];
+}
+
+std::vector<uint32> GambitMgr::GetPassives(uint32 guidLow)
+{
+    std::lock_guard<std::mutex> guard(cacheLock);
+    return EffectivePassives(Cached(guidLow));
+}
+
+std::vector<uint32> GambitMgr::GetClassPassives(uint8 classId)
+{
+    std::lock_guard<std::mutex> guard(cacheLock);
+    return classPassives[classId];
+}
+
+void GambitMgr::WriteOwn(uint32 guidLow, const std::vector<GambitSlot>& slots, const std::vector<uint32>& passives)
+{
+    // All values are validated numbers
+    CharacterDatabase.PExecute("DELETE FROM `vanguard_gambit` WHERE `guid` = '%u'", guidLow);
+    for (const GambitSlot& gambit : slots)
+    {
+        CharacterDatabase.PExecute("INSERT INTO `vanguard_gambit` (`guid`, `slot`, `enabled`, `condition_id`, `condition_param`, `action_id`, `action_param`) "
+            "VALUES ('%u', '%u', '%u', '%u', '%u', '%u', '%u')",
+            guidLow, uint32(gambit.slot), uint32(gambit.enabled ? 1 : 0), gambit.conditionId, gambit.conditionParam, gambit.actionId, gambit.actionParam);
+    }
+    CharacterDatabase.PExecute("DELETE FROM `vanguard_passive` WHERE `guid` = '%u'", guidLow);
+    for (size_t i = 0; i < passives.size(); ++i)
+        CharacterDatabase.PExecute("INSERT INTO `vanguard_passive` (`guid`, `slot`, `spell_id`) VALUES ('%u', '%u', '%u')", guidLow, uint32(i + 1), passives[i]);
+    CharacterDatabase.PExecute("INSERT IGNORE INTO `vanguard_gambit_custom` (`guid`) VALUES ('%u')", guidLow);
 }
 
 std::vector<GambitSlot> GambitMgr::GetSlots(uint32 guidLow)
@@ -255,22 +326,104 @@ bool GambitMgr::Save(uint32 guidLow, const std::vector<GambitSlot>& slots, std::
 
     std::vector<GambitSlot> numbered = Numbered(slots);
 
-    // All values are validated numbers
+    // The passives stay as they are: its own, or (becoming custom now) its class default's
+    std::lock_guard<std::mutex> guard(cacheLock);
+    Companion& companion = Cached(guidLow);
+    std::vector<uint32> passives = EffectivePassives(companion);
+
     CharacterDatabase.BeginTransaction();
-    CharacterDatabase.PExecute("DELETE FROM `vanguard_gambit` WHERE `guid` = '%u'", guidLow);
-    for (const GambitSlot& gambit : numbered)
-    {
-        CharacterDatabase.PExecute("INSERT INTO `vanguard_gambit` (`guid`, `slot`, `enabled`, `condition_id`, `condition_param`, `action_id`, `action_param`) "
-            "VALUES ('%u', '%u', '%u', '%u', '%u', '%u', '%u')",
-            guidLow, uint32(gambit.slot), uint32(gambit.enabled ? 1 : 0), gambit.conditionId, gambit.conditionParam, gambit.actionId, gambit.actionParam);
-    }
-    CharacterDatabase.PExecute("INSERT IGNORE INTO `vanguard_gambit_custom` (`guid`) VALUES ('%u')", guidLow);
+    WriteOwn(guidLow, numbered, passives);
     CharacterDatabase.CommitTransaction();
+
+    companion.custom = true;
+    companion.slots = numbered;
+    companion.passives = passives;
+    return true;
+}
+
+bool GambitMgr::ValidatePassives(uint8 classId, const std::vector<uint32>& spells, std::string& error) const
+{
+    if (spells.size() > GAMBIT_MAX_PASSIVES)
+    {
+        error = "at most 3 passives";
+        return false;
+    }
+
+    auto catalog = passiveCatalog.find(classId);
+    std::set<std::string> groups;
+    for (size_t i = 0; i < spells.size(); ++i)
+    {
+        std::string where = "passive " + std::to_string(i + 1) + ": ";
+        const GambitPassiveInfo* info = nullptr;
+        if (catalog != passiveCatalog.end())
+        {
+            for (const GambitPassiveInfo& entry : catalog->second)
+            {
+                if (entry.spellId == spells[i])
+                    info = &entry;
+            }
+        }
+        if (!info)
+        {
+            error = where + "spell " + std::to_string(spells[i]) + " is not a passive of this class";
+            return false;
+        }
+        if (!groups.insert(info->group).second)
+        {
+            error = where + "only one passive of the kind '" + info->group + "' (they replace each other)";
+            return false;
+        }
+    }
+    return true;
+}
+
+bool GambitMgr::SavePassives(uint32 guidLow, const std::vector<uint32>& spells, std::string& error)
+{
+    if (!CharacterDatabase.PQuery("SELECT 1 FROM `characters` WHERE `guid` = '%u'", guidLow))
+    {
+        error = "no character with that guid";
+        return false;
+    }
 
     std::lock_guard<std::mutex> guard(cacheLock);
     Companion& companion = Cached(guidLow);
+    if (!ValidatePassives(companion.classId, spells, error))
+        return false;
+
+    // The gambits stay as they are: its own, or (becoming custom now) its class default's
+    std::vector<GambitSlot> slots = Effective(companion);
+
+    CharacterDatabase.BeginTransaction();
+    WriteOwn(guidLow, slots, spells);
+    CharacterDatabase.CommitTransaction();
+
     companion.custom = true;
-    companion.slots = numbered;
+    companion.slots = slots;
+    companion.passives = spells;
+    return true;
+}
+
+bool GambitMgr::SaveClassPassives(uint8 classId, const std::vector<uint32>& spells, std::string& error)
+{
+    if (!IsPlayableClass(classId))
+    {
+        error = "unknown class " + std::to_string(classId);
+        return false;
+    }
+
+    if (!ValidatePassives(classId, spells, error))
+        return false;
+
+    CharacterDatabase.BeginTransaction();
+    CharacterDatabase.PExecute("DELETE FROM `vanguard_passive_class_default` WHERE `class` = '%u'", uint32(classId));
+    for (size_t i = 0; i < spells.size(); ++i)
+        CharacterDatabase.PExecute("INSERT INTO `vanguard_passive_class_default` (`class`, `slot`, `spell_id`) VALUES ('%u', '%u', '%u')", uint32(classId), uint32(i + 1), spells[i]);
+    // A GM's list, even an empty one, is never replaced by the starting defaults again
+    CharacterDatabase.PExecute("INSERT IGNORE INTO `vanguard_passive_class_seeded` (`class`) VALUES ('%u')", uint32(classId));
+    CharacterDatabase.CommitTransaction();
+
+    std::lock_guard<std::mutex> guard(cacheLock);
+    classPassives[classId] = spells;
     return true;
 }
 
@@ -284,6 +437,7 @@ bool GambitMgr::Reset(uint32 guidLow, std::string& error)
 
     CharacterDatabase.BeginTransaction();
     CharacterDatabase.PExecute("DELETE FROM `vanguard_gambit` WHERE `guid` = '%u'", guidLow);
+    CharacterDatabase.PExecute("DELETE FROM `vanguard_passive` WHERE `guid` = '%u'", guidLow);
     CharacterDatabase.PExecute("DELETE FROM `vanguard_gambit_custom` WHERE `guid` = '%u'", guidLow);
     CharacterDatabase.CommitTransaction();
 
@@ -291,6 +445,7 @@ bool GambitMgr::Reset(uint32 guidLow, std::string& error)
     Companion& companion = Cached(guidLow);
     companion.custom = false;
     companion.slots.clear();
+    companion.passives.clear();
     return true;
 }
 
@@ -392,11 +547,23 @@ static bool ParseSlots(ChatHandler* handler, const std::vector<uint32>& numbers,
     return true;
 }
 
+static void ListPassives(ChatHandler* handler, const std::vector<uint32>& spells)
+{
+    for (size_t i = 0; i < spells.size(); ++i)
+    {
+        const SpellEntry* spell = sServerFacade.LookupSpellInfo(spells[i]);
+        handler->PSendSysMessage("P%u. %s", uint32(i + 1), spell ? spell->SpellName[0] : std::to_string(spells[i]).c_str());
+    }
+}
+
 bool GambitMgr::HandleConsoleCommand(ChatHandler* handler, char const* args)
 {
     std::istringstream in(args ? args : "");
     std::string sub;
     in >> sub;
+    bool passive = sub == "passive";
+    if (passive)
+        in >> sub;
     bool classDefault = sub == "default";
     if (classDefault)
         in >> sub;
@@ -404,13 +571,15 @@ bool GambitMgr::HandleConsoleCommand(ChatHandler* handler, char const* args)
     std::getline(in, rest);
 
     std::vector<uint32> numbers;
-    bool known = sub == "list" || sub == "save" || (!classDefault && sub == "reset");
+    bool known = passive ? sub == "save" : (sub == "list" || sub == "save" || (!classDefault && sub == "reset"));
     if (!known || !ParseNumbers(rest, numbers) || numbers.empty())
     {
         handler->SendSysMessage("Usage: .gambit list|reset <guid>");
         handler->SendSysMessage("       .gambit save <guid> <count> [<enabled> <condition> <param> <action> <param>] x count");
         handler->SendSysMessage("       .gambit default list <class>");
         handler->SendSysMessage("       .gambit default save <class> <count> [<enabled> <condition> <param> <action> <param>] x count");
+        handler->SendSysMessage("       .gambit passive save <guid> <count> [<spell>] x count");
+        handler->SendSysMessage("       .gambit passive default save <class> <count> [<spell>] x count");
         return false;
     }
 
@@ -420,19 +589,42 @@ bool GambitMgr::HandleConsoleCommand(ChatHandler* handler, char const* args)
     std::vector<uint32> slotNumbers(numbers.begin() + 1, numbers.end());
     std::string error;
 
+    if (passive)
+    {
+        if (slotNumbers.empty() || slotNumbers.size() != 1 + size_t(slotNumbers[0]))
+        {
+            handler->SendSysMessage("Passives not saved: the count does not match the number of spells");
+            return false;
+        }
+        std::vector<uint32> spells(slotNumbers.begin() + 1, slotNumbers.end());
+        bool saved = classDefault ? sGambitMgr.SaveClassPassives(uint8(id), spells, error) : sGambitMgr.SavePassives(id, spells, error);
+        if (!saved)
+        {
+            handler->PSendSysMessage("Passives not saved: %s", error.c_str());
+            return false;
+        }
+        handler->PSendSysMessage(classDefault ? "Saved %u default passives for class %u" : "Saved %u passives for %u", uint32(spells.size()), id);
+        return true;
+    }
+
     if (sub == "list")
     {
         std::vector<GambitSlot> slots;
+        std::vector<uint32> passives;
         if (classDefault)
         {
             slots = sGambitMgr.GetClassDefault(uint8(id));
-            handler->PSendSysMessage("Default gambits of class %u: %u", id, uint32(slots.size()));
+            passives = sGambitMgr.GetClassPassives(uint8(id));
+            handler->PSendSysMessage("Default gambits of class %u: %u, passives: %u", id, uint32(slots.size()), uint32(passives.size()));
         }
         else
         {
             slots = sGambitMgr.GetSlots(id);
-            handler->PSendSysMessage("Gambits of %u (%s): %u", id, sGambitMgr.IsCustom(id) ? "own list" : "class default", uint32(slots.size()));
+            passives = sGambitMgr.GetPassives(id);
+            handler->PSendSysMessage("Gambits of %u (%s): %u, passives: %u", id, sGambitMgr.IsCustom(id) ? "own list" : "class default",
+                uint32(slots.size()), uint32(passives.size()));
         }
+        ListPassives(handler, passives);
         for (const GambitSlot& gambit : slots)
             handler->PSendSysMessage("%s", sGambitMgr.Describe(gambit).c_str());
         return true;

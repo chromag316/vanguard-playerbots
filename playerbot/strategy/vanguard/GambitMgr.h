@@ -8,6 +8,9 @@
 // vanguard_gambit_action). In the characters DB: each class's default list
 // (vanguard_gambit_class_default), and a companion's own list (vanguard_gambit), used only when
 // the companion is in vanguard_gambit_custom. The ids below are fixed: the DB rows only name them.
+// Passives: up to 3 self spells a companion keeps up (aspects, stances, auras...), picked from the
+// class's catalog (world vanguard_gambit_passive), stored like the gambits (vanguard_passive,
+// vanguard_passive_class_default) and covered by the same custom flag.
 
 #include <map>
 #include <mutex>
@@ -38,6 +41,8 @@ namespace ai
         GAMBIT_COND_FOE_WITHOUT_AURA    = 27,
     };
 
+    inline bool IsFoeGambitCondition(uint32 conditionId) { return conditionId >= GAMBIT_COND_FOE_LEADER_TARGET; }
+
     enum GambitActionId : uint32
     {
         GAMBIT_ACTION_CAST              = 1,
@@ -48,6 +53,7 @@ namespace ai
     };
 
     constexpr uint8 GAMBIT_MAX_SLOTS = 12;
+    constexpr uint8 GAMBIT_MAX_PASSIVES = 3;
 
     inline bool IsSelfGambitCondition(uint32 conditionId) { return conditionId >= GAMBIT_COND_SELF_ANY && conditionId <= GAMBIT_COND_SELF_MANA_BELOW; }
 
@@ -75,6 +81,13 @@ namespace ai
         bool selfOnly = false;
     };
 
+    // A spell a class may pick as a passive; at most one per exclusive group
+    struct GambitPassiveInfo
+    {
+        uint32 spellId = 0;
+        std::string group;
+    };
+
     class GambitMgr
     {
     public:
@@ -100,9 +113,17 @@ namespace ai
         bool Reset(uint32 guidLow, std::string& error);
         bool SaveClassDefault(uint8 classId, const std::vector<GambitSlot>& slots, std::string& error);
 
+        // Passives in effect (rank-1 spell ids, slot order), and their saves. Saving either list
+        // makes a companion custom; the other list is copied from its class default then.
+        std::vector<uint32> GetPassives(uint32 guidLow);
+        std::vector<uint32> GetClassPassives(uint8 classId);
+        bool SavePassives(uint32 guidLow, const std::vector<uint32>& spells, std::string& error);
+        bool SaveClassPassives(uint8 classId, const std::vector<uint32>& spells, std::string& error);
+
         std::string Describe(const GambitSlot& gambit) const;
 
-        // ".gambit list|save|reset|default list|default save" (mangosd console, SOAP)
+        // ".gambit list|save|reset|default list|default save|passive save|passive default save"
+        // (mangosd console, SOAP)
         static bool HandleConsoleCommand(ChatHandler* handler, char const* args);
 
     private:
@@ -111,19 +132,26 @@ namespace ai
             uint8 classId = 0;
             bool custom = false;
             std::vector<GambitSlot> slots;
+            std::vector<uint32> passives;
         };
 
         // guidLow 0: a class default (spells are only checked to exist)
         bool Validate(uint32 guidLow, const std::vector<GambitSlot>& slots, std::string& error) const;
+        bool ValidatePassives(uint8 classId, const std::vector<uint32>& spells, std::string& error) const;
         Companion& Cached(uint32 guidLow); // cacheLock held
         const std::vector<GambitSlot>& Effective(Companion& companion);
+        const std::vector<uint32>& EffectivePassives(Companion& companion);
+        // Writes a companion's own lists and its custom row (in the caller's transaction)
+        static void WriteOwn(uint32 guidLow, const std::vector<GambitSlot>& slots, const std::vector<uint32>& passives);
 
         std::map<uint32, GambitConditionInfo> conditions;
         std::map<uint32, GambitActionInfo> actions;
+        std::map<uint8, std::vector<GambitPassiveInfo>> passiveCatalog;
 
         std::mutex cacheLock;
         std::map<uint32, Companion> cache;
         std::map<uint8, std::vector<GambitSlot>> classDefaults;
+        std::map<uint8, std::vector<uint32>> classPassives;
     };
 }
 

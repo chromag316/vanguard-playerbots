@@ -157,6 +157,18 @@ bool GambitAction::Execute(Event& event)
     }
 }
 
+bool GambitPassiveAction::Execute(Event& event)
+{
+    uint32 spellId = GambitPassiveSpellId(ai, getQualifier());
+    return spellId && ai->CastSpell(spellId, bot);
+}
+
+bool GambitPassiveAction::isPossible()
+{
+    uint32 spellId = GambitPassiveSpellId(ai, getQualifier());
+    return spellId && ai->CanCastSpell(spellId, bot, 0, true);
+}
+
 bool GambitListAction::Execute(Event& event)
 {
     Player* requester = event.getOwner() ? event.getOwner() : GetMaster();

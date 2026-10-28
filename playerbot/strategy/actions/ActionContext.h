@@ -211,6 +211,7 @@ namespace ai
             creators["hearthstone"] = [](PlayerbotAI* ai) { return new UseHearthStoneAction(ai); };
             creators["cast random spell"] = [](PlayerbotAI* ai) { return new CastRandomSpellAction(ai); };
             creators["gambit action"] = [](PlayerbotAI* ai) { return new GambitAction(ai); };
+            creators["gambit passive action"] = [](PlayerbotAI* ai) { return new GambitPassiveAction(ai); };
             creators["free bg join"] = [](PlayerbotAI* ai) { return new FreeBGJoinAction(ai); };
             creators["use random recipe"] = [](PlayerbotAI* ai) { return new UseRandomRecipeAction(ai); };
             creators["open random item"] = [](PlayerbotAI* ai) { return new OpenRandomItemAction(ai); };
