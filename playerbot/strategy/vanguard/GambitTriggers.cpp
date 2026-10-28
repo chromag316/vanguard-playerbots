@@ -72,6 +72,21 @@ static bool IsAlly(const std::vector<Unit*>& allies, Unit* unit)
     return std::find(allies.begin(), allies.end(), unit) != allies.end();
 }
 
+// The bot or a group member near it is in combat. Before that, a companion does not engage
+// on its own: it waits for the fight to start, or for its master's "attack" order (which
+// puts the bot itself in combat).
+static bool PartyInCombat(PlayerbotAI* ai)
+{
+    if (sServerFacade.IsInCombat(ai->GetBot()))
+        return true;
+    for (Unit* ally : Allies(ai))
+    {
+        if (sServerFacade.IsInCombat(ally))
+            return true;
+    }
+    return false;
+}
+
 Unit* ai::FindGambitTarget(PlayerbotAI* ai, const GambitSlot& gambit)
 {
     Player* bot = ai->GetBot();
@@ -138,8 +153,9 @@ Unit* ai::FindGambitTarget(PlayerbotAI* ai, const GambitSlot& gambit)
 
     case GAMBIT_COND_FOE_LEADER_TARGET:
     {
+        // Selecting a mob is not a fight yet; the other Foe conditions only see attackers
         Player* leader = ai->GetGroupMaster();
-        if (!leader || leader == bot)
+        if (!leader || leader == bot || !PartyInCombat(ai))
             return nullptr;
         Unit* target = ai->GetUnit(leader->GetSelectionGuid());
         return target && target->IsAlive() && bot->CanAttack(target) ? target : nullptr;
