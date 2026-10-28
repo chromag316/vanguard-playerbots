@@ -4182,7 +4182,8 @@ Aura* PlayerbotAI::GetAura(uint32 spellId, Unit* unit, bool checkIsOwner)
             {
                 if (checkIsOwner)
                 {
-                    if (aura->GetHolder() && aura->GetHolder()->GetCasterGuid() == bot->GetObjectGuid())
+                    // Vanguard: was aura->, which is still null here (crashed on the gambits' debuff checks)
+                    if (auraTmp->GetHolder() && auraTmp->GetHolder()->GetCasterGuid() == bot->GetObjectGuid())
                     {
                         aura = auraTmp;
                         break;
