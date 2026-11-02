@@ -81,21 +81,23 @@ bool CastSpellAction::Execute(Event& event)
 }
 
 // Vanguard: the spells a companion's normal AI may still cast on its own: mounting, ranged
-// auto-attack and looking after its pet. Every other spell comes from its player's gambits and
-// passives, which cast through PlayerbotAI::CastSpell and do not pass here.
+// auto-attack, looking after its pet, conjuring food and water, and buffs (CastBuffSpellAction:
+// aspects, stances, forms, auras, seals, armors, party buffs). Every other spell comes from its
+// player's gambits, which cast through PlayerbotAI::CastSpell and do not pass here.
 static bool IsCompanionFallbackSpell(const std::string& name)
 {
     static const std::set<std::string> allowed = {
         "mount", "auto shot", "shoot",
         "call pet", "revive pet", "dismiss pet", "feed pet",
         "summon imp", "summon voidwalker", "summon succubus", "summon felhunter",
+        "conjure food", "conjure water",
     };
     return allowed.count(name) != 0;
 }
 
 bool CastSpellAction::isPossible()
 {
-    if (ai->IsCompanion() && !IsCompanionFallbackSpell(spellName))
+    if (ai->IsCompanion() && !IsCompanionFallbackSpell(spellName) && !dynamic_cast<CastBuffSpellAction*>(this))
         return false;
 
     if (spellName == "mount")

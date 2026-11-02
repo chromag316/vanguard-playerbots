@@ -51,6 +51,7 @@ bool GambitAction::isUseful()
     switch (gambit.actionId)
     {
     case GAMBIT_ACTION_CAST:
+    case GAMBIT_ACTION_CAST_RANK:
     {
         uint32 spellId = GambitSpellId(ai, gambit);
         const SpellEntry* spell = spellId ? sServerFacade.LookupSpellInfo(spellId) : nullptr;
@@ -80,10 +81,6 @@ bool GambitAction::isUseful()
         return leader && leader != bot && leader->GetMapId() == bot->GetMapId() &&
             sServerFacade.GetDistance(bot, leader) > sPlayerbotAIConfig.followDistance + 5.0f;
     }
-    case GAMBIT_ACTION_EAT:
-        return !sServerFacade.IsInCombat(bot) && !bot->HasAuraType(SPELL_AURA_MOD_REGEN);
-    case GAMBIT_ACTION_DRINK:
-        return !sServerFacade.IsInCombat(bot) && bot->GetPowerType() == POWER_MANA && !bot->HasAuraType(SPELL_AURA_MOD_POWER_REGEN);
     default:
         return false;
     }
@@ -99,6 +96,7 @@ bool GambitAction::isPossible()
     switch (gambit.actionId)
     {
     case GAMBIT_ACTION_CAST:
+    case GAMBIT_ACTION_CAST_RANK:
     {
         // Range is handled in Execute: out of reach, the companion moves closer first
         uint32 spellId = GambitSpellId(ai, gambit);
@@ -108,12 +106,6 @@ bool GambitAction::isPossible()
         return target->IsAlive() && AttackAction::isPossible();
     case GAMBIT_ACTION_MOVE_TO_LEADER:
         return MovementAction::isPossible();
-    case GAMBIT_ACTION_EAT:
-    case GAMBIT_ACTION_DRINK:
-    {
-        Action* use = context->GetAction(gambit.actionId == GAMBIT_ACTION_EAT ? "food" : "drink");
-        return use && use->isPossible();
-    }
     default:
         return false;
     }
@@ -129,6 +121,7 @@ bool GambitAction::Execute(Event& event)
     switch (gambit.actionId)
     {
     case GAMBIT_ACTION_CAST:
+    case GAMBIT_ACTION_CAST_RANK:
     {
         uint32 spellId = GambitSpellId(ai, gambit);
         const SpellEntry* spell = spellId ? sServerFacade.LookupSpellInfo(spellId) : nullptr;
@@ -145,28 +138,9 @@ bool GambitAction::Execute(Event& event)
         Player* leader = ai->GetGroupMaster();
         return leader && MoveNear(leader, sPlayerbotAIConfig.followDistance);
     }
-    case GAMBIT_ACTION_EAT:
-    case GAMBIT_ACTION_DRINK:
-    {
-        // The gambit decides when; the stock food/drink actions only do the eating and drinking
-        Action* use = context->GetAction(gambit.actionId == GAMBIT_ACTION_EAT ? "food" : "drink");
-        return use && use->Execute(event);
-    }
     default:
         return false;
     }
-}
-
-bool GambitPassiveAction::Execute(Event& event)
-{
-    uint32 spellId = GambitPassiveSpellId(ai, getQualifier());
-    return spellId && ai->CastSpell(spellId, bot);
-}
-
-bool GambitPassiveAction::isPossible()
-{
-    uint32 spellId = GambitPassiveSpellId(ai, getQualifier());
-    return spellId && ai->CanCastSpell(spellId, bot, 0, true);
 }
 
 bool GambitListAction::Execute(Event& event)

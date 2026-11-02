@@ -5,35 +5,20 @@
 
 using namespace ai;
 
-uint32 ai::KnownSpellRank(PlayerbotAI* ai, uint32 spellId)
+uint32 ai::GambitSpellId(PlayerbotAI* ai, const GambitSlot& gambit)
 {
-    const SpellEntry* spell = sServerFacade.LookupSpellInfo(spellId);
+    // "Cast spell (exact rank)": the stored rank, when the bot knows it
+    if (gambit.actionId == GAMBIT_ACTION_CAST_RANK)
+        return ai->GetBot()->HasSpell(gambit.actionParam) ? gambit.actionParam : 0;
+
+    if (gambit.actionId != GAMBIT_ACTION_CAST)
+        return 0;
+
+    const SpellEntry* spell = sServerFacade.LookupSpellInfo(gambit.actionParam);
     if (!spell)
         return 0;
 
     return ai->GetAiObjectContext()->GetValue<uint32>("spell id", spell->SpellName[0])->Get();
-}
-
-uint32 ai::GambitSpellId(PlayerbotAI* ai, const GambitSlot& gambit)
-{
-    return gambit.actionId == GAMBIT_ACTION_CAST ? KnownSpellRank(ai, gambit.actionParam) : 0;
-}
-
-uint32 ai::GambitPassiveSpellId(PlayerbotAI* ai, const std::string& slot)
-{
-    size_t index = size_t(atoi(slot.c_str()));
-    std::vector<uint32> passives = sGambitMgr.GetPassives(ai->GetBot()->GetGUIDLow());
-    if (index < 1 || index > passives.size())
-        return 0;
-    return KnownSpellRank(ai, passives[index - 1]);
-}
-
-bool GambitPassiveTrigger::IsActive()
-{
-    uint32 spellId = GambitPassiveSpellId(ai, getQualifier());
-    const SpellEntry* spell = spellId ? sServerFacade.LookupSpellInfo(spellId) : nullptr;
-    // By name: any rank of the aspect, stance or aura counts
-    return spell && !ai->HasAura(spell->SpellName[0], bot);
 }
 
 static float HealthPct(Unit* unit)
