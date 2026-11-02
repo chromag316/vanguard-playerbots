@@ -1,5 +1,8 @@
 #pragma once
 #include "GenericActions.h"
+#include "playerbot/LootObjectStack.h"
+
+#include <map>
 
 namespace ai
 {
@@ -53,6 +56,10 @@ namespace ai
 
     private:
         bool AddLoot(Player* requester, ObjectGuid guid) override;
+        // Vanguard: a companion tells its master why it can't gather a node or skin a corpse
+        // (skill too low, no tool, bags full); once per node and reason every few minutes
+        void ExplainCannotGather(Player* requester, ObjectGuid guid, const LootObject& loot);
+        std::map<std::pair<ObjectGuid, std::string>, time_t> explained;
 
 #ifdef GenerateBotHelp
         virtual std::string GetHelpName() { return "add gathering loot"; }

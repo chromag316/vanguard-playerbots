@@ -210,9 +210,69 @@ bool AddAllLootAction::AddLoot(Player* requester, ObjectGuid guid)
     return AI_VALUE(LootObjectStack*, "available loot")->Add(guid);
 }
 
+void AddGatheringLootAction::ExplainCannotGather(Player* requester, ObjectGuid guid, const LootObject& loot)
+{
+    uint32 skillId = loot.skillId;
+    if (skillId != SKILL_MINING && skillId != SKILL_HERBALISM && skillId != SKILL_SKINNING)
+        return;
+
+    // Not its profession: nothing to say
+    if (!ai->HasSkill((SkillType)skillId))
+        return;
+
+    // Only what is near its master and in sight, like what it would gather
+    WorldObject* wo = ai->GetWorldObject(guid);
+    if (!wo || !sServerFacade.IsWithinLOSInMap(bot, wo) ||
+        sServerFacade.IsDistanceGreaterThan(sServerFacade.GetDistance2d(requester, wo), sPlayerbotAIConfig.gatheringDistance))
+        return;
+
+    const char* verb = skillId == SKILL_MINING ? "mine" : skillId == SKILL_HERBALISM ? "gather" : "skin";
+    const char* skill = skillId == SKILL_MINING ? "Mining" : skillId == SKILL_HERBALISM ? "Herbalism" : "Skinning";
+    uint32 value = bot->GetSkillValue(skillId);
+
+    std::string reason;
+    std::ostringstream out;
+    if (loot.reqSkillValue > value)
+    {
+        reason = "skill";
+        out << "I need " << skill << " " << loot.reqSkillValue << " to " << verb << " " << wo->GetName() << ", I only have " << value << ".";
+    }
+    else if (skillId == SKILL_MINING && !bot->HasItemCount(2901, 1))
+    {
+        reason = "tool";
+        out << "I need a Mining Pick to mine " << wo->GetName() << ".";
+    }
+    else if (skillId == SKILL_SKINNING && !bot->HasItemCount(7005, 1))
+    {
+        reason = "tool";
+        out << "I need a Skinning Knife to skin " << wo->GetName() << ".";
+    }
+    else if (AI_VALUE(uint8, "bag space") > 99)
+    {
+        reason = "bags";
+        out << "My bags are full, so I can't " << verb << " " << wo->GetName() << ".";
+    }
+    else
+        return;
+
+    time_t now = time(nullptr);
+    if (explained.size() > 100)
+        explained.clear();
+    auto key = std::make_pair(guid, reason);
+    auto told = explained.find(key);
+    if (told != explained.end() && now - told->second < 180)
+        return;
+    explained[key] = now;
+    ai->TellPlayer(requester, out.str());
+}
+
 bool AddGatheringLootAction::AddLoot(Player* requester, ObjectGuid guid)
 {
     LootObject loot(bot, guid);
+
+    // Vanguard: say why instead of skipping it silently
+    if (ai->IsCompanion() && requester && (loot.IsEmpty() || !loot.IsLootPossible(bot)))
+        ExplainCannotGather(requester, guid, loot);
 
     WorldObject *wo = loot.GetWorldObject(bot);
     if (loot.IsEmpty() || !wo)
