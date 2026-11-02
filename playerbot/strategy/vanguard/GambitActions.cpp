@@ -98,9 +98,10 @@ bool GambitAction::isPossible()
     case GAMBIT_ACTION_CAST:
     case GAMBIT_ACTION_CAST_RANK:
     {
-        // Range is handled in Execute: out of reach, the companion moves closer first
+        // Range is handled in Execute: out of reach, the companion moves closer first. GambitSpellId
+        // already checked the bot may cast it (a lower rank of a known spell is not in its list).
         uint32 spellId = GambitSpellId(ai, gambit);
-        return spellId && ai->CanCastSpell(spellId, target, 0, true, nullptr, true);
+        return spellId && ai->CanCastSpell(spellId, target, 0, false, nullptr, true);
     }
     case GAMBIT_ACTION_ATTACK:
         return target->IsAlive() && AttackAction::isPossible();

@@ -19,6 +19,35 @@ static bool IsPlayableClass(uint32 classId)
     }
 }
 
+// The character knows the spell, or a higher rank of it, which makes the lower rank castable
+// too (characters may only list the highest rank they learned)
+static bool KnowsSpellOrHigherRank(uint32 guidLow, Player* player, uint32 spellId)
+{
+    std::vector<uint32> known;
+    if (player)
+    {
+        for (const auto& entry : player->GetSpellMap())
+        {
+            if (entry.second.state != PLAYERSPELL_REMOVED && !entry.second.disabled)
+                known.push_back(entry.first);
+        }
+    }
+    else if (auto result = CharacterDatabase.PQuery("SELECT `spell` FROM `character_spell` WHERE `guid` = '%u' AND `disabled` = 0", guidLow))
+    {
+        do
+        {
+            known.push_back(result->Fetch()[0].GetUInt32());
+        } while (result->NextRow());
+    }
+
+    for (uint32 id : known)
+    {
+        if (id == spellId || sSpellMgr.IsSpellHigherRankOfSpell(id, spellId))
+            return true;
+    }
+    return false;
+}
+
 static GambitSlot ReadSlot(Field* fields)
 {
     GambitSlot gambit;
@@ -228,9 +257,7 @@ bool GambitMgr::Validate(uint32 guidLow, const std::vector<GambitSlot>& slots, s
         if (!guidLow)
             continue;
 
-        bool known = player ? player->HasSpell(gambit.actionParam)
-            : bool(CharacterDatabase.PQuery("SELECT 1 FROM `character_spell` WHERE `guid` = '%u' AND `spell` = '%u'", guidLow, gambit.actionParam));
-        if (!known)
+        if (!KnowsSpellOrHigherRank(guidLow, player, gambit.actionParam))
         {
             error = where + "the companion does not know spell " + std::to_string(gambit.actionParam);
             return false;

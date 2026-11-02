@@ -7,18 +7,21 @@ using namespace ai;
 
 uint32 ai::GambitSpellId(PlayerbotAI* ai, const GambitSlot& gambit)
 {
-    // "Cast spell (exact rank)": the stored rank, when the bot knows it
-    if (gambit.actionId == GAMBIT_ACTION_CAST_RANK)
-        return ai->GetBot()->HasSpell(gambit.actionParam) ? gambit.actionParam : 0;
-
-    if (gambit.actionId != GAMBIT_ACTION_CAST)
+    if (gambit.actionId != GAMBIT_ACTION_CAST && gambit.actionId != GAMBIT_ACTION_CAST_RANK)
         return 0;
 
     const SpellEntry* spell = sServerFacade.LookupSpellInfo(gambit.actionParam);
     if (!spell)
         return 0;
 
-    return ai->GetAiObjectContext()->GetValue<uint32>("spell id", spell->SpellName[0])->Get();
+    uint32 highest = ai->GetAiObjectContext()->GetValue<uint32>("spell id", spell->SpellName[0])->Get();
+    if (gambit.actionId == GAMBIT_ACTION_CAST)
+        return highest;
+
+    // "Cast spell (exact rank)": the stored rank, when the bot knows it or a higher rank of the
+    // same spell (characters may only list the highest rank they learned)
+    bool known = ai->GetBot()->HasSpell(gambit.actionParam) || (highest && sSpellMgr.IsSpellHigherRankOfSpell(highest, gambit.actionParam));
+    return known ? gambit.actionParam : 0;
 }
 
 static float HealthPct(Unit* unit)
