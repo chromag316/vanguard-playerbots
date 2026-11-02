@@ -95,9 +95,18 @@ static bool IsCompanionFallbackSpell(const std::string& name)
     return allowed.count(name) != 0;
 }
 
+// Buffs the fallback still must not cast: stealth. A stealthed bot waits for an opener (Ambush,
+// Cheap Shot...), which only a gambit may cast, so it would never attack.
+static bool IsCompanionStealthSpell(const std::string& name)
+{
+    static const std::set<std::string> stealth = { "stealth", "vanish", "prowl", "shadowmeld" };
+    return stealth.count(name) != 0;
+}
+
 bool CastSpellAction::isPossible()
 {
-    if (ai->IsCompanion() && !IsCompanionFallbackSpell(spellName) && !dynamic_cast<CastBuffSpellAction*>(this))
+    if (ai->IsCompanion() && !IsCompanionFallbackSpell(spellName) &&
+        (!dynamic_cast<CastBuffSpellAction*>(this) || IsCompanionStealthSpell(spellName)))
         return false;
 
     if (spellName == "mount")
