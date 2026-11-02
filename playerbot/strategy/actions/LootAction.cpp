@@ -116,7 +116,10 @@ bool OpenLootAction::DoLoot(LootObject& lootObject)
         return false;
 
     if (go && (go->IsInUse() || go->GetGoState() == GO_STATE_ACTIVE))
+    {
+        ai->TellDebug(ai->GetMaster(), std::string("Open loot: ") + go->GetName() + std::string(go->IsInUse() ? " is in use." : " is active."), "debug loot");
         return false;
+    }
 
     if (lootObject.skillId == SKILL_MINING)
         return ai->HasSkill(SKILL_MINING) ? ai->CastSpell(MINING, bot) : false;

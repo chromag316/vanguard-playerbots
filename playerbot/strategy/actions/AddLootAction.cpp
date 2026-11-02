@@ -276,16 +276,27 @@ bool AddGatheringLootAction::AddLoot(Player* requester, ObjectGuid guid)
 
     WorldObject *wo = loot.GetWorldObject(bot);
     if (loot.IsEmpty() || !wo)
+    {
+        GameObject* go = wo && wo->GetTypeId() == TYPEID_GAMEOBJECT ? static_cast<GameObject*>(wo) : nullptr;
+        if (go && go->GetGoType() == GAMEOBJECT_TYPE_CHEST)
+            ai->TellDebug(requester, std::string("Gather: ") + wo->GetName() + " has nothing to gather.", "debug loot");
         return false;
+    }
 
     if (!sServerFacade.IsWithinLOSInMap(bot, wo))
+    {
+        ai->TellDebug(requester, std::string("Gather: ") + wo->GetName() + " is not in line of sight.", "debug loot");
         return false;
+    }
 
     if (loot.skillId == SKILL_NONE)
         return false;
 
     if (!loot.IsLootPossible(bot))
+    {
+        ai->TellDebug(requester, std::string("Gather: ") + wo->GetName() + " is not possible to gather.", "debug loot");
         return false;
+    }
 
     float gatheringDistanceToUse = sPlayerbotAIConfig.gatheringDistance;
 
@@ -318,6 +329,7 @@ bool AddGatheringLootAction::AddLoot(Player* requester, ObjectGuid guid)
 
     if (sServerFacade.IsDistanceGreaterThan(sServerFacade.GetDistance2d(requester, wo), gatheringDistanceToUse))
     {
+        ai->TellDebug(requester, std::string("Gather: ") + wo->GetName() + " is outside gathering range: " + std::to_string(gatheringDistanceToUse), "debug loot");
         return false;
     }
 
@@ -387,5 +399,6 @@ bool AddGatheringLootAction::AddLoot(Player* requester, ObjectGuid guid)
         }
     }
 
+    ai->TellDebug(requester, std::string("Gather: adding ") + wo->GetName() + ".", "debug loot");
     return AddAllLootAction::AddLoot(requester, guid);
 }
