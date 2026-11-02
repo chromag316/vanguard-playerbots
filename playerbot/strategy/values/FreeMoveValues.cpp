@@ -71,6 +71,10 @@ float FreeMoveRangeValue::Calculate()
    }
    if (ai->HasStrategy("follow", ai->GetState()))
    {
+       // Vanguard: a following companion may step away to the loot, herb, ore or corpse to skin
+       // it found (as far as it looks for them), instead of being pulled straight back
+       if (ai->IsCompanion() && AI_VALUE(bool, "has available loot"))
+           return std::max(ai->GetRange("follow"), sPlayerbotAIConfig.lootDistance);
        return ai->GetRange("follow");
    }
    if (ai->HasStrategy("guard", ai->GetState()))

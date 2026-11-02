@@ -43,19 +43,32 @@ static bool CanDispel(PlayerbotAI* ai, uint32 spellId, Unit* target)
     return false;
 }
 
-// Group members on the bot's map and within sight, the player included; the bot alone when it
-// has no group.
+// Group members on the bot's map and within sight, the player included, and their living pets
+// (a hunter's or warlock's pet, the bot's own too); the bot alone when it has no group.
 static std::vector<Unit*> Allies(PlayerbotAI* ai)
 {
     Player* bot = ai->GetBot();
     std::vector<Unit*> allies;
-    for (ObjectGuid guid : ai->GetAiObjectContext()->GetValue<std::list<ObjectGuid>>("group members")->Get())
+    auto add = [&](Unit* unit)
     {
-        Unit* unit = ai->GetUnit(guid);
         if (unit && unit->IsInWorld() && unit->GetMapId() == bot->GetMapId() &&
             sServerFacade.GetDistance(bot, unit) <= sPlayerbotAIConfig.sightDistance)
             allies.push_back(unit);
+    };
+    for (ObjectGuid guid : ai->GetAiObjectContext()->GetValue<std::list<ObjectGuid>>("group members")->Get())
+    {
+        Unit* unit = ai->GetUnit(guid);
+        add(unit);
+        if (unit && unit->IsPlayer())
+        {
+            Pet* pet = static_cast<Player*>(unit)->GetPet();
+            if (pet && pet->IsAlive())
+                add(pet);
+        }
     }
+    Pet* ownPet = bot->GetPet();
+    if (ownPet && ownPet->IsAlive() && std::find(allies.begin(), allies.end(), ownPet) == allies.end())
+        add(ownPet);
     return allies;
 }
 

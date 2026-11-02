@@ -127,7 +127,9 @@ bool AddAllLootAction::AddLoot(Player* requester, ObjectGuid guid)
             return false;
         }
 
-        if (ai->IsGroupLeader())
+        // Vanguard: a companion loots and skins as far as a group leader would, not only at its
+        // master's feet (GroupMemberLootDistanceWithActiveMaster, 10 yards)
+        if (ai->IsGroupLeader() || ai->IsCompanion())
         {
             lootDistanceToUse = sPlayerbotAIConfig.lootDistance;
         }
@@ -160,6 +162,10 @@ bool AddAllLootAction::AddLoot(Player* requester, ObjectGuid guid)
     {
         float MOB_AGGRO_DISTANCE = 30.0f;
         std::list<Unit*> hostiles = ai->GetAllHostileNPCNonPetUnitsAroundWO(wo, MOB_AGGRO_DISTANCE);
+
+        // Vanguard: mobs 8+ levels below a companion do not stop it
+        if (ai->IsCompanion())
+            hostiles.remove_if([this](Unit* hostile) { return bot->GetLevel() > hostile->GetLevel() + 7; });
 
         if (hostiles.size() > 0)
         {
@@ -228,7 +234,9 @@ bool AddGatheringLootAction::AddLoot(Player* requester, ObjectGuid guid)
     bool isInGroup = group ? true : false;
     bool isInDungeon = bot->GetMap()->IsDungeon();
 
-    if (isInGroup && !ai->IsGroupLeader())
+    // Vanguard: a companion gathers like a group leader: as far (GatheringDistance, not the 5 yards
+    // of GroupMemberGatheringDistanceWithActiveMaster) and stopped only by strong mobs (below)
+    if (isInGroup && !ai->IsGroupLeader() && !ai->IsCompanion())
     {
         if (ai->HasActivePlayerMaster())
         {
@@ -266,7 +274,7 @@ bool AddGatheringLootAction::AddLoot(Player* requester, ObjectGuid guid)
         }
     }
 
-    if (isInGroup && !ai->IsGroupLeader())
+    if (isInGroup && !ai->IsGroupLeader() && !ai->IsCompanion())
     {
         if (hostiles.size() > 0)
         {
@@ -278,7 +286,8 @@ bool AddGatheringLootAction::AddLoot(Player* requester, ObjectGuid guid)
     }
     else
     {
-        if (strongHostiles.size() > 1)
+        // A leader minds two strong mobs; a companion (Vanguard) already one
+        if (strongHostiles.size() > (ai->IsCompanion() ? 0u : 1u))
         {
             std::ostringstream out;
             out << strongHostiles.front()->GetName() << " is blocking " << wo->GetName() << ", need to kill it or I will not gather";
