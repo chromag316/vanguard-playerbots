@@ -247,6 +247,7 @@ namespace ai
 
             creators["val"] = [](PlayerbotAI* ai) { return new ValueTrigger(ai); };
             creators["gambit"] = [](PlayerbotAI* ai) { return new GambitTrigger(ai); };
+            creators["gambit retreat over"] = [](PlayerbotAI* ai) { return new GambitRetreatOverTrigger(ai); };
 
             creators["rpg"] = [](PlayerbotAI* ai) { return new RpgTrigger(ai); };
             creators["rpg wander"] = [](PlayerbotAI* ai) { return new RpgWanderTrigger(ai); };

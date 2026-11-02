@@ -144,6 +144,13 @@ bool GambitAction::Execute(Event& event)
     }
 }
 
+bool GambitEndRetreatAction::Execute(Event& event)
+{
+    ai->ChangeStrategy("-passive", BotState::BOT_STATE_COMBAT);
+    ai->ChangeStrategy("-passive,+follow", BotState::BOT_STATE_NON_COMBAT);
+    return true;
+}
+
 bool GambitListAction::Execute(Event& event)
 {
     Player* requester = event.getOwner() ? event.getOwner() : GetMaster();

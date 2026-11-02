@@ -23,4 +23,8 @@ void GambitStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
 void GambitStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
 {
     AddGambitTriggers(triggers);
+
+    // Retreat lasts for the fight only: afterwards the companion follows again
+    triggers.push_back(new TriggerNode("gambit retreat over",
+        NextAction::array(0, new NextAction("gambit end retreat", 97.0f), NULL)));
 }

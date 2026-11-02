@@ -21,6 +21,15 @@ namespace ai
         bool IsActive() override;
     };
 
+    // "gambit retreat over": a Retreat order ("flee" adds "passive") is in force, and nobody in
+    // the party is in combat any more
+    class GambitRetreatOverTrigger : public Trigger
+    {
+    public:
+        GambitRetreatOverTrigger(PlayerbotAI* ai) : Trigger(ai, "gambit retreat over") {}
+        bool IsActive() override;
+    };
+
     // The spell a "Cast spell" gambit casts: the bot's highest known rank of the stored spell;
     // for "Cast spell (exact rank)", the stored rank itself. 0 when the bot can't cast it.
     uint32 GambitSpellId(PlayerbotAI* ai, const GambitSlot& gambit);

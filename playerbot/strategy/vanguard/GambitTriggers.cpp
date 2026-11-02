@@ -236,3 +236,9 @@ bool GambitTrigger::IsActive()
     SET_AI_VALUE2(ObjectGuid, "gambit target", getQualifier(), target ? target->GetObjectGuid() : ObjectGuid());
     return target != nullptr;
 }
+
+bool GambitRetreatOverTrigger::IsActive()
+{
+    return (ai->HasStrategy("passive", BotState::BOT_STATE_NON_COMBAT) || ai->HasStrategy("passive", BotState::BOT_STATE_COMBAT)) &&
+        !PartyInCombat(ai);
+}

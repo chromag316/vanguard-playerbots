@@ -20,6 +20,14 @@ namespace ai
         bool Current(GambitSlot& gambit, Unit*& target);
     };
 
+    // "gambit end retreat": the fight is over, so a Retreat order becomes a plain follow again
+    class GambitEndRetreatAction : public Action
+    {
+    public:
+        GambitEndRetreatAction(PlayerbotAI* ai) : Action(ai, "gambit end retreat") {}
+        bool Execute(Event& event) override;
+    };
+
     // "gambits" (whisper): the companion lists its gambits
     class GambitListAction : public ChatCommandAction
     {
