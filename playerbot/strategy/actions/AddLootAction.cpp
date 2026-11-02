@@ -283,7 +283,10 @@ bool AddGatheringLootAction::AddLoot(Player* requester, ObjectGuid guid)
         return false;
     }
 
-    if (!sServerFacade.IsWithinLOSInMap(bot, wo))
+    // Vanguard: veins and herbs sit half inside rock and ground, so a line to their base is often
+    // blocked; a line to a point above the node, or standing within reach of it, counts too
+    if (!sServerFacade.IsWithinLOSInMap(bot, wo) && !bot->IsWithinLOS(wo->GetPositionX(), wo->GetPositionY(), wo->GetPositionZ() + 2.0f) &&
+        !(ai->IsCompanion() && bot->IsWithinDistInMap(wo, INTERACTION_DISTANCE)))
     {
         ai->TellDebug(requester, std::string("Gather: ") + wo->GetName() + " is not in line of sight.", "debug loot");
         return false;
