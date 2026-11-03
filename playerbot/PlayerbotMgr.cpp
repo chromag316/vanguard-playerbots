@@ -12,6 +12,7 @@
 #include "Accounts/AccountMgr.h"
 #include "strategy/actions/ChangeTalentsAction.h"
 #include "strategy/actions/InviteToGroupAction.h"
+#include "strategy/vanguard/TalentPlanMgr.h"
 #include "strategy/values/PositionValue.h"
 #include "AiFactory.h"
 #include "Guilds/GuildMgr.h"
@@ -603,6 +604,9 @@ void PlayerbotHolder::OnBotLogin(Player * const bot)
                 ai->ChangeStrategy("+stay", BotState::BOT_STATE_NON_COMBAT);
         }
         ai->SetGreetMaster(false);
+
+        // The saved talent plan is the truth: talents changed by hand are put back on each call
+        sTalentPlanMgr.Apply(bot);
     }
 
     if (master && !master->IsTaxiFlying())

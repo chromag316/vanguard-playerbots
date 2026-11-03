@@ -3,6 +3,7 @@
 #include "playerbot/Talentspec.h"
 #include "ChangeTalentsAction.h"
 #include "playerbot/AiFactory.h"
+#include "playerbot/strategy/vanguard/TalentPlanMgr.h"
 
 using namespace ai;
 
@@ -401,6 +402,10 @@ bool AutoSetTalentsAction::Execute(Event& event)
     sPlayerbotAIConfig.logEvent(ai, "AutoSetTalentsAction", std::to_string(bot->m_Played_time[PLAYED_TIME_LEVEL]), std::to_string(bot->m_Played_time[PLAYED_TIME_TOTAL]));
 
     std::ostringstream out;
+
+    // Vanguard: a companion with a talent plan learns the plan's next points, never a premade spec
+    if (ai->IsCompanion() && sTalentPlanMgr.Apply(bot))
+        return true;
 
     if (sPlayerbotAIConfig.autoPickTalents == "no" && !sRandomPlayerbotMgr.IsRandomBot(bot))
     {

@@ -55,6 +55,7 @@
 #include "AI/ScriptDevAI/ScriptDevAIMgr.h"
 #include "strategy/values/GuildValues.h"
 #include "strategy/vanguard/GambitMgr.h"
+#include "strategy/vanguard/TalentPlanMgr.h"
 
 using namespace ai;
 
@@ -7142,6 +7143,11 @@ bool ChatHandler::HandleRandomPlayerbotCommand(char* args)
 bool ChatHandler::HandleGambitCommand(char* args)
 {
     return GambitMgr::HandleConsoleCommand(this, args);
+}
+
+bool ChatHandler::HandleTalentPlanCommand(char* args)
+{
+    return TalentPlanMgr::HandleConsoleCommand(this, args);
 }
 
 //Dummy handler until Chat.h can be modified.
